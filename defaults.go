@@ -1,0 +1,19 @@
+package obs
+
+import (
+	"obs/logging"
+	"obs/metrics"
+)
+
+var Log logging.Logger
+var Metrics metrics.MetricsReceiver
+
+func init() {
+	Log = logging.NewDefault()
+	metricsReceiver, err := metrics.NewDefault()
+	if err != nil {
+		Log.Errorf("Error initializing metrics.", logging.Fields{}.WithError(err))
+	} else {
+		Metrics = metricsReceiver
+	}
+}
