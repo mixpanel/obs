@@ -112,7 +112,7 @@ func (sink *udpSink) readAll() string {
 	result := make([]byte, 0, 128)
 	buf := make([]byte, 128)
 	for {
-		sink.conn.SetReadDeadline(time.Now().Add(3 * time.Millisecond))
+		sink.conn.SetReadDeadline(time.Now().Add(10 * time.Millisecond))
 		n, err := sink.conn.Read(buf)
 		result = append(result, buf[0:n]...)
 		if timeout, ok := err.(net.Error); ok && timeout.Timeout() {
