@@ -77,6 +77,9 @@ func newLogger(syslogLevel level, filepath string, fileLevel level) *logger {
 	} else if len(filepath) > 0 {
 		file, err := os.OpenFile(filepath, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0644)
 		if err != nil {
+			initError(fmt.Sprintf("Unable to open file for logging: %v.", err))
+			golog.SetOutput(os.Stderr)
+		} else {
 			golog.SetOutput(file)
 		}
 	} else {
