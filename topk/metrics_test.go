@@ -3,6 +3,7 @@ package topk
 import (
 	"obs/metrics"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/mock"
 )
@@ -16,7 +17,7 @@ func TestReceiver(t *testing.T) {
 		receiver.Track(1 + int32(i%4))
 	}
 	receiver.Track(5)
-
+	time.Sleep(10 * time.Millisecond)
 	mockMetrics.AssertCalled(t, "Incr", "top.1")
 	mockMetrics.AssertCalled(t, "Incr", "top.2")
 	mockMetrics.AssertCalled(t, "Incr", "top.3")
