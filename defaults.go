@@ -12,7 +12,7 @@ func init() {
 	Log = logging.NewDefault()
 	metricsReceiver, err := metrics.NewDefault()
 	if err != nil {
-		Log.Errorf("Error initializing metrics.", logging.Fields{}.WithError(err))
+		Log.Errorf("error initializing metrics: {{error_message}}", logging.Fields{}.WithError(err))
 	} else {
 		Metrics = metricsReceiver
 	}

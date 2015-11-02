@@ -91,7 +91,7 @@ func (mr *receiver) send(name string, metricType metricType, value float64) {
 
 	_, err := mr.conn.Write([]byte(data))
 	if err != nil {
-		log.Printf("Error while writing to statsd: %v", err)
+		log.Printf("error while writing to statsd: %v", err)
 	}
 }
 
