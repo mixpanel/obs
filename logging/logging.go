@@ -1,9 +1,6 @@
 package logging
 
-import (
-	"flag"
-	"os"
-)
+import "flags"
 
 var initErrors []string
 
@@ -17,17 +14,10 @@ func NewDefault() Logger {
 }
 
 func buildLogger() Logger {
-	flagSet := flag.NewFlagSet("logging", flag.ContinueOnError)
-	var syslogLevel, logFile, fileLevel string
-	flagSet.StringVar(&syslogLevel, "log.syslog.level", "NEVER", "One of CRIT, ERR, WARN, INFO, DEBUG, NEVER. Defaults to WARN.")
-	flagSet.StringVar(&fileLevel, "log.file.level", "INFO", "One of CRIT, ERR, WARN, INFO, DEBUG, NEVER. Defaults to INFO.")
-	flagSet.StringVar(&logFile, "log.file.path", "", "File path to log. Defaults to stderr.")
-	flagSet.Parse(os.Args)
-
 	return newLogger(
-		levelStringToLevel(syslogLevel),
-		logFile,
-		levelStringToLevel(fileLevel),
+		levelStringToLevel(flags.SyslogLevel),
+		flags.LogFile,
+		levelStringToLevel(flags.FileLevel),
 	)
 }
 

@@ -1,11 +1,10 @@
 package metrics
 
 import (
-	"flag"
+	"flags"
 	"fmt"
 	"log"
 	"net"
-	"os"
 	"time"
 )
 
@@ -53,10 +52,7 @@ type Stopwatch interface {
 }
 
 func NewDefault() (MetricsReceiver, error) {
-	var address string
-	fs := flag.NewFlagSet("metrics", flag.ContinueOnError)
-	fs.StringVar(&address, "metrics.endpoint", "", "Address (host:port) to send metrics.")
-	fs.Parse(os.Args)
+	address := flags.MetricsEndpoint
 	if address != "" {
 		return NewMetrics(address)
 	} else {
