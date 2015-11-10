@@ -11,6 +11,10 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+func init() {
+	batchSize = 1
+}
+
 func TestCounterIncr(t *testing.T) {
 	metrics, sink := newTestMetrics(t)
 	metrics.Incr("test_counter")
@@ -116,13 +120,13 @@ func (sink *udpSink) readAll() string {
 		n, err := sink.conn.Read(buf)
 		result = append(result, buf[0:n]...)
 		if timeout, ok := err.(net.Error); ok && timeout.Timeout() {
-			return string(result)
+			return strings.TrimSpace(string(result))
 		}
 		util.CheckFatalError(err)
 	}
 }
 
-func newTestMetrics(t *testing.T) (MetricsReceiver, *udpSink) {
+func newTestMetrics(t *testing.T) (Receiver, *udpSink) {
 	sink := newUDPSink()
 	metrics, err := NewMetrics(sink.address)
 	assert.Nil(t, err)

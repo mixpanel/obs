@@ -1,6 +1,6 @@
 package metrics
 
-var NullReceiver MetricsReceiver = nullReceiver(struct{}{})
+var Null Receiver = nullReceiver(struct{}{})
 
 type nullReceiver struct{}
 type nullStopwatch struct{}
@@ -17,15 +17,15 @@ func (nl nullReceiver) AddStat(name string, value float64) {
 func (nl nullReceiver) SetGauge(name string, value float64) {
 }
 
-func (nl nullReceiver) ScopePrefix(prefix string) MetricsReceiver {
+func (nl nullReceiver) ScopePrefix(prefix string) Receiver {
 	return nl
 }
 
-func (nl nullReceiver) ScopeTags(tags Tags) MetricsReceiver {
+func (nl nullReceiver) ScopeTags(tags Tags) Receiver {
 	return nl
 }
 
-func (nl nullReceiver) Scope(prefix string, tags Tags) MetricsReceiver {
+func (nl nullReceiver) Scope(prefix string, tags Tags) Receiver {
 	return nl
 }
 
@@ -34,4 +34,7 @@ func (nl nullReceiver) StartStopwatch(name string) Stopwatch {
 }
 
 func (ns nullStopwatch) Stop() {
+}
+
+func (nl nullReceiver) Close() {
 }

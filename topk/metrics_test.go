@@ -43,15 +43,15 @@ func (mock *mockMetrics) AddStat(name string, value float64) {
 func (mock *mockMetrics) SetGauge(name string, value float64) {
 }
 
-func (mock *mockMetrics) ScopePrefix(prefix string) metrics.MetricsReceiver {
+func (mock *mockMetrics) ScopePrefix(prefix string) metrics.Receiver {
 	return mock
 }
 
-func (mock *mockMetrics) ScopeTags(tags metrics.Tags) metrics.MetricsReceiver {
+func (mock *mockMetrics) ScopeTags(tags metrics.Tags) metrics.Receiver {
 	return mock
 }
 
-func (mock *mockMetrics) Scope(prefix string, tags metrics.Tags) metrics.MetricsReceiver {
+func (mock *mockMetrics) Scope(prefix string, tags metrics.Tags) metrics.Receiver {
 	return mock
 }
 
@@ -61,4 +61,7 @@ func (mock *mockMetrics) StartStopwatch(name string) metrics.Stopwatch {
 
 func newMockMetrics() *mockMetrics {
 	return &mockMetrics{}
+}
+
+func (mock *mockMetrics) Close() {
 }

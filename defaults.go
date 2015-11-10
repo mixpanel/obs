@@ -6,7 +6,7 @@ import (
 )
 
 var Log logging.Logger
-var Metrics metrics.MetricsReceiver
+var Metrics metrics.Receiver
 
 func init() {
 	Log = logging.NewDefault()

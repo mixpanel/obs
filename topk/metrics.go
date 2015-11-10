@@ -11,7 +11,7 @@ const (
 )
 
 // A best-effort receiver. We buffer up to chanBufferSize values, and process them in a single goroutine.
-// The top K values will be reported to the provided MetricsReceiver.
+// The top K values will be reported to the provided Receiver.
 type Receiver interface {
 	Track(int32)
 	Close()
@@ -19,11 +19,11 @@ type Receiver interface {
 
 type receiver struct {
 	ch      chan<- int32
-	metrics metrics.MetricsReceiver
+	metrics metrics.Receiver
 	wg      *sync.WaitGroup
 }
 
-func New(metrics metrics.MetricsReceiver, k int) Receiver {
+func New(metrics metrics.Receiver, k int) Receiver {
 	ch := make(chan int32, chanBufferSize)
 	wg := &sync.WaitGroup{}
 	wg.Add(1)

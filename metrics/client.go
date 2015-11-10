@@ -1,15 +1,20 @@
 package metrics
 
 import (
+	"bytes"
 	"flags"
 	"fmt"
+	"io"
 	"log"
 	"net"
+	"sync"
 	"time"
 )
 
 type Tags map[string]string
 type metricType string
+
+var batchSize = 4096
 
 var (
 	metricTypeCounter = metricType("ct")
@@ -18,28 +23,31 @@ var (
 )
 
 type receiver struct {
-	conn   net.Conn
-	prefix string
-	tags   Tags
+	prefix  string
+	metrics chan string
+	tags    Tags
+	wg      *sync.WaitGroup
 }
 
-type MetricsReceiver interface {
+type Receiver interface {
 	Incr(name string)
 	IncrBy(name string, amount float64)
 	AddStat(name string, value float64)
 	SetGauge(name string, value float64)
 
-	ScopePrefix(prefix string) MetricsReceiver
-	ScopeTags(tags Tags) MetricsReceiver
-	Scope(prefix string, tags Tags) MetricsReceiver
+	ScopePrefix(prefix string) Receiver
+	ScopeTags(tags Tags) Receiver
+	Scope(prefix string, tags Tags) Receiver
 
 	StartStopwatch(name string) Stopwatch
+
+	Close()
 }
 
 type stopwatch struct {
 	name      string
 	startTime time.Time
-	receiver  MetricsReceiver
+	receiver  Receiver
 }
 
 func (sw *stopwatch) Stop() {
@@ -51,25 +59,29 @@ type Stopwatch interface {
 	Stop()
 }
 
-func NewDefault() (MetricsReceiver, error) {
+func NewDefault() (Receiver, error) {
 	address := flags.MetricsEndpoint
 	if address != "" {
 		return NewMetrics(address)
 	} else {
-		return NullReceiver, nil
+		return Null, nil
 	}
 }
 
-func NewMetrics(addr string) (MetricsReceiver, error) {
+func NewMetrics(addr string) (Receiver, error) {
 	conn, err := net.Dial("udp", addr)
 	if err != nil {
 		return nil, err
 	}
+	wg := &sync.WaitGroup{}
 	metricsReceiver := &receiver{
-		conn:   conn,
-		prefix: "",
-		tags:   make(map[string]string),
+		prefix:  "",
+		metrics: make(chan string, 128),
+		tags:    make(map[string]string),
+		wg:      wg,
 	}
+	wg.Add(1)
+	go metricsReceiver.flusher(conn)
 	return metricsReceiver, nil
 }
 
@@ -89,9 +101,41 @@ func (mr *receiver) send(name string, metricType metricType, value float64) {
 		data = data[0 : len(data)-1]
 	}
 
-	_, err := mr.conn.Write([]byte(data))
-	if err != nil {
-		log.Printf("error while writing to statsd: %v", err)
+	mr.metrics <- data
+}
+
+func (mr *receiver) flusher(conn net.Conn) {
+	buf := bytes.NewBuffer(nil)
+	flushInterval := 5 * time.Second
+	nextFlush := time.After(flushInterval)
+
+	defer mr.wg.Done()
+	for {
+		select {
+		case stat, ok := <-mr.metrics:
+			if !ok {
+				flushBuffer(conn, buf)
+				return
+			}
+
+			io.WriteString(buf, stat)
+			io.WriteString(buf, "\n")
+			if buf.Len() > batchSize {
+				flushBuffer(conn, buf)
+			}
+		case _ = <-nextFlush:
+			flushBuffer(conn, buf)
+			nextFlush = time.After(flushInterval)
+		}
+	}
+}
+
+func flushBuffer(conn net.Conn, buf *bytes.Buffer) {
+	if buf.Len() > 0 {
+		if _, err := conn.Write(buf.Bytes()); err != nil {
+			log.Printf("error while writing to statsd: %v", err)
+		}
+		buf.Reset()
 	}
 }
 
@@ -111,15 +155,15 @@ func (mr *receiver) SetGauge(name string, value float64) {
 	mr.send(name, metricTypeGauge, value)
 }
 
-func (mr *receiver) ScopePrefix(prefix string) MetricsReceiver {
+func (mr *receiver) ScopePrefix(prefix string) Receiver {
 	return mr.Scope(prefix, nil)
 }
 
-func (mr *receiver) ScopeTags(tags Tags) MetricsReceiver {
+func (mr *receiver) ScopeTags(tags Tags) Receiver {
 	return mr.Scope("", tags)
 }
 
-func (mr *receiver) Scope(prefix string, tags Tags) MetricsReceiver {
+func (mr *receiver) Scope(prefix string, tags Tags) Receiver {
 	newPrefix := prefix
 	if len(prefix) == 0 {
 		newPrefix = mr.prefix
@@ -138,9 +182,9 @@ func (mr *receiver) Scope(prefix string, tags Tags) MetricsReceiver {
 	}
 
 	return &receiver{
-		conn:   mr.conn,
-		prefix: newPrefix,
-		tags:   newTags,
+		prefix:  newPrefix,
+		metrics: mr.metrics,
+		tags:    newTags,
 	}
 }
 
@@ -150,4 +194,9 @@ func (mr *receiver) StartStopwatch(name string) Stopwatch {
 		startTime: time.Now(),
 		receiver:  mr,
 	}
+}
+
+func (mr *receiver) Close() {
+	close(mr.metrics)
+	mr.wg.Wait()
 }
