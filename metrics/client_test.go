@@ -1,9 +1,11 @@
 package metrics
 
 import (
+	"bytes"
 	"net"
 	"regexp"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 	"util"
@@ -13,6 +15,34 @@ import (
 
 func init() {
 	batchSize = 1
+}
+
+func BenchmarkSendStats(b *testing.B) {
+	ch := make(chan *bytes.Buffer, 16)
+
+	wg := &sync.WaitGroup{}
+	wg.Add(1)
+	go func() {
+		remaining := b.N
+		for _ = range ch {
+			remaining--
+			if remaining == 0 {
+				wg.Done()
+				return
+			}
+		}
+	}()
+	mr := &receiver{
+		prefix:  "test",
+		metrics: ch,
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		mr.send("test_counter", metricTypeCounter, 1.0)
+	}
+	wg.Wait()
+
 }
 
 func TestCounterIncr(t *testing.T) {

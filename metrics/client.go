@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"flags"
 	"fmt"
-	"io"
 	"log"
 	"net"
 	"sync"
@@ -24,7 +23,7 @@ var (
 
 type receiver struct {
 	prefix  string
-	metrics chan string
+	metrics chan *bytes.Buffer
 	tags    Tags
 	wg      *sync.WaitGroup
 }
@@ -52,7 +51,7 @@ type stopwatch struct {
 
 func (sw *stopwatch) Stop() {
 	latency := time.Now().Sub(sw.startTime) / time.Microsecond
-	sw.receiver.AddStat(fmt.Sprintf("%s_us", sw.name), float64(latency))
+	sw.receiver.AddStat(sw.name+"_us", float64(latency))
 }
 
 type Stopwatch interface {
@@ -76,7 +75,7 @@ func NewMetrics(addr string) (Receiver, error) {
 	wg := &sync.WaitGroup{}
 	metricsReceiver := &receiver{
 		prefix:  "",
-		metrics: make(chan string, 128),
+		metrics: make(chan *bytes.Buffer, 128),
 		tags:    make(map[string]string),
 		wg:      wg,
 	}
@@ -86,26 +85,35 @@ func NewMetrics(addr string) (Receiver, error) {
 }
 
 func (mr *receiver) send(name string, metricType metricType, value float64) {
-	separator := ""
+	buf := sharedBufferPool.get()
+
 	if len(mr.prefix) > 0 {
-		separator = "."
+		buf.WriteString(mr.prefix)
+		buf.WriteString(".")
 	}
-	data := fmt.Sprintf("%s%s%s:%g|%s", mr.prefix, separator, name, value, metricType)
+	buf.WriteString(name)
+	fmt.Fprintf(buf, ":%g|", value)
+	buf.WriteString(string(metricType))
 
 	// prefix.name:value|type|#tagKey:tagValue
 	if len(mr.tags) > 0 {
-		data += "|#"
+		buf.WriteString("|#")
+		numTags := len(mr.tags)
 		for k, v := range mr.tags {
-			data += fmt.Sprintf("%s:%s,", k, v)
+			buf.WriteString(k)
+			buf.WriteString(":")
+			buf.WriteString(v)
+			numTags--
+			if numTags > 0 {
+				buf.WriteString(",")
+			}
 		}
-		data = data[0 : len(data)-1]
 	}
-
-	mr.metrics <- data
+	mr.metrics <- buf
 }
 
 func (mr *receiver) flusher(conn net.Conn) {
-	buf := bytes.NewBuffer(nil)
+	buf := &bytes.Buffer{}
 	flushInterval := 5 * time.Second
 	nextFlush := time.After(flushInterval)
 
@@ -118,8 +126,9 @@ func (mr *receiver) flusher(conn net.Conn) {
 				return
 			}
 
-			io.WriteString(buf, stat)
-			io.WriteString(buf, "\n")
+			stat.WriteTo(buf)
+			sharedBufferPool.put(stat)
+			buf.WriteString("\n")
 			if buf.Len() > batchSize {
 				flushBuffer(conn, buf)
 			}
@@ -168,7 +177,7 @@ func (mr *receiver) Scope(prefix string, tags Tags) Receiver {
 	if len(prefix) == 0 {
 		newPrefix = mr.prefix
 	} else if len(mr.prefix) > 0 {
-		newPrefix = fmt.Sprintf("%s.%s", mr.prefix, prefix)
+		newPrefix = mr.prefix + "." + prefix
 	}
 
 	newTags := make(map[string]string, len(tags)+len(mr.tags))
