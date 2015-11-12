@@ -9,9 +9,9 @@ import (
 )
 
 func TestItemListBasic(t *testing.T) {
-	list := make(itemList, 0)
+	var list itemList
 
-	items := make([]*item, 0)
+	var items []*item
 	for idx := 0; idx < 10; idx++ {
 		i := &item{int32(idx), 0, 0}
 		items = append(items, i)

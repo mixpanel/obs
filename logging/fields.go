@@ -14,11 +14,11 @@ func init() {
 	localhostFields = getLocalhostFields()
 }
 
-func (lhs Fields) Update(rhs Fields) Fields {
-	for k, v := range rhs {
-		lhs[k] = v
+func (fields Fields) Update(updates Fields) Fields {
+	for k, v := range updates {
+		fields[k] = v
 	}
-	return lhs
+	return fields
 }
 
 func (fields Fields) populateStandardFields(lvl level, name string) {

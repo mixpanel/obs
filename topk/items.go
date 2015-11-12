@@ -10,11 +10,11 @@ type item struct {
 // after changing the frequency, you must call fix with the item in order to fix the ordering.
 type itemList []*item
 
-func (l *itemList) put(i *item) {
-	orig := *l
+func (il *itemList) put(i *item) {
+	orig := *il
 	i.index = len(orig)
-	*l = append(orig, i)
-	l.fix(i)
+	*il = append(orig, i)
+	il.fix(i)
 }
 
 func (il *itemList) remove(i *item) {
@@ -32,25 +32,25 @@ func (il *itemList) remove(i *item) {
 	*il = l[0 : len(l)-1]
 }
 
-func (l itemList) fix(i *item) {
-	if len(l) < 2 {
+func (il itemList) fix(i *item) {
+	if len(il) < 2 {
 		return
 	}
 
 	idx := i.index
-	for idx < len(l)-1 && l[idx+1].frequency > i.frequency {
-		l.swap(idx, idx+1)
+	for idx < len(il)-1 && il[idx+1].frequency > i.frequency {
+		il.swap(idx, idx+1)
 		idx = i.index
 	}
 
-	for idx > 0 && l[idx-1].frequency < i.frequency {
-		l.swap(idx, idx-1)
+	for idx > 0 && il[idx-1].frequency < i.frequency {
+		il.swap(idx, idx-1)
 		idx = i.index
 	}
 }
 
-func (l itemList) swap(i, j int) {
-	l[i], l[j] = l[j], l[i]
-	l[i].index = i
-	l[j].index = j
+func (il itemList) swap(i, j int) {
+	il[i], il[j] = il[j], il[i]
+	il[i].index = i
+	il[j].index = j
 }

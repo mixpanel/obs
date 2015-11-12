@@ -60,11 +60,10 @@ type Stopwatch interface {
 
 func NewDefault() (Receiver, error) {
 	address := flags.MetricsEndpoint
-	if address != "" {
-		return NewMetrics(address)
-	} else {
+	if address == "" {
 		return Null, nil
 	}
+	return NewMetrics(address)
 }
 
 func NewMetrics(addr string) (Receiver, error) {

@@ -81,7 +81,6 @@ func (t *tracker) track(value int32) bool {
 func (t tracker) isTopK(value int32) bool {
 	if item, ok := t.items[value]; t.filled && ok {
 		return item.index < t.k
-	} else {
-		return false
 	}
+	return false
 }
