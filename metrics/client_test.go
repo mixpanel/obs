@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"net"
 	"regexp"
-	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -49,28 +48,24 @@ func BenchmarkSendStats(b *testing.B) {
 func TestCounterIncr(t *testing.T) {
 	metrics, sink := newTestMetrics(t)
 	metrics.Incr("test_counter")
-	runtime.Gosched()
 	assert.Equal(t, "test_counter:1|ct", sink.readAll())
 }
 
 func TestCounterIncrBy(t *testing.T) {
 	metrics, sink := newTestMetrics(t)
 	metrics.IncrBy("test_counter", 123.456)
-	runtime.Gosched()
 	assert.Equal(t, "test_counter:123.456|ct", sink.readAll())
 }
 
 func TestAddStat(t *testing.T) {
 	metrics, sink := newTestMetrics(t)
 	metrics.AddStat("test_stat", 1.234)
-	runtime.Gosched()
 	assert.Equal(t, "test_stat:1.234|h", sink.readAll())
 }
 
 func TestSetGauge(t *testing.T) {
 	metrics, sink := newTestMetrics(t)
 	metrics.SetGauge("test_gauge", 4.321)
-	runtime.Gosched()
 	assert.Equal(t, "test_gauge:4.321|g", sink.readAll())
 }
 
@@ -78,7 +73,6 @@ func TestCounterWithTags(t *testing.T) {
 	metrics, sink := newTestMetrics(t)
 	tags := Tags{"aKey": "aValue", "aKey2": "aValue2"}
 	metrics.ScopeTags(Tags{"aKey": "aValue", "aKey2": "aValue2"}).Incr("test_counter")
-	runtime.Gosched()
 	assert.Equal(t, tags, parseTags(sink.readAll()))
 }
 
@@ -86,7 +80,6 @@ func TestStatWithTags(t *testing.T) {
 	metrics, sink := newTestMetrics(t)
 	tags := Tags{"aKey": "aValue", "aKey2": "aValue2"}
 	metrics.ScopeTags(Tags{"aKey": "aValue", "aKey2": "aValue2"}).AddStat("test_stat", 1.2345)
-	runtime.Gosched()
 	assert.Equal(t, tags, parseTags(sink.readAll()))
 }
 
@@ -94,7 +87,6 @@ func TestSetGaugeWithTags(t *testing.T) {
 	metrics, sink := newTestMetrics(t)
 	tags := Tags{"aKey": "aValue", "aKey2": "aValue2"}
 	metrics.ScopeTags(tags).SetGauge("test_gauge", 4.321)
-	runtime.Gosched()
 	assert.Equal(t, tags, parseTags(sink.readAll()))
 }
 
@@ -105,12 +97,10 @@ func TestScopeOverridesTags(t *testing.T) {
 
 	metrics = metrics.ScopeTags(tags1)
 	metrics.Incr("test")
-	runtime.Gosched()
 	assert.Equal(t, tags1, parseTags(sink.readAll()))
 
 	metrics = metrics.ScopeTags(tags2)
 	metrics.Incr("test")
-	runtime.Gosched()
 	assert.Equal(t, tags2, parseTags(sink.readAll()))
 }
 
@@ -119,12 +109,10 @@ func TestScopePrefix(t *testing.T) {
 
 	metrics = metrics.ScopePrefix("prefix1")
 	metrics.Incr("test")
-	runtime.Gosched()
 	assert.Equal(t, "prefix1.test:1|ct", sink.readAll())
 
 	metrics = metrics.ScopePrefix("prefix2")
 	metrics.Incr("test")
-	runtime.Gosched()
 	assert.Equal(t, "prefix1.prefix2.test:1|ct", sink.readAll())
 }
 
@@ -134,8 +122,6 @@ func TestStopwatch(t *testing.T) {
 	sw := metrics.StartStopwatch("test_latency")
 	time.Sleep(1 * time.Microsecond)
 	sw.Stop()
-
-	runtime.Gosched()
 
 	emitted := sink.readAll()
 	re := regexp.MustCompile("\\Atest_latency_us:[0-9]+\\.?[0-9]*\\|h\\z")
@@ -160,7 +146,7 @@ func (sink *udpSink) readAll() string {
 	result := make([]byte, 0, 128)
 	buf := make([]byte, 128)
 	for {
-		sink.conn.SetReadDeadline(time.Now().Add(10 * time.Millisecond))
+		sink.conn.SetReadDeadline(time.Now().Add(50 * time.Millisecond))
 		n, err := sink.conn.Read(buf)
 		result = append(result, buf[0:n]...)
 		if timeout, ok := err.(net.Error); ok && timeout.Timeout() {
