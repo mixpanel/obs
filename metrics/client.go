@@ -25,6 +25,7 @@ type receiver struct {
 	metrics chan *bytes.Buffer
 	tags    Tags
 	wg      *sync.WaitGroup
+	parent  *receiver
 }
 
 type Receiver interface {
@@ -71,6 +72,7 @@ func New(addr string) (Receiver, error) {
 		metrics: make(chan *bytes.Buffer, 128),
 		tags:    make(map[string]string),
 		wg:      wg,
+		parent:  nil,
 	}
 	wg.Add(1)
 	go metricsReceiver.flusher(conn)
@@ -187,6 +189,7 @@ func (mr *receiver) Scope(prefix string, tags Tags) Receiver {
 		prefix:  newPrefix,
 		metrics: mr.metrics,
 		tags:    newTags,
+		parent:  mr,
 	}
 }
 
@@ -199,6 +202,10 @@ func (mr *receiver) StartStopwatch(name string) Stopwatch {
 }
 
 func (mr *receiver) Close() {
+	if mr.parent != nil {
+		mr.parent.Close()
+		return
+	}
 	close(mr.metrics)
 	mr.wg.Wait()
 }
