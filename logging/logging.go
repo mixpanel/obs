@@ -1,11 +1,9 @@
 package logging
 
-import "flags"
-
 var initErrors []string
 
-func NewDefault() Logger {
-	logger := buildLogger()
+func New(syslogLevel, fileLevel, filePath string) Logger {
+	logger := buildLogger(syslogLevel, fileLevel, filePath)
 	for _, message := range initErrors {
 		logger.Error(message)
 	}
@@ -13,11 +11,11 @@ func NewDefault() Logger {
 	return logger
 }
 
-func buildLogger() Logger {
+func buildLogger(syslogLevel, fileLevel, filePath string) Logger {
 	return newLogger(
-		levelStringToLevel(flags.SyslogLevel),
-		flags.LogFile,
-		levelStringToLevel(flags.FileLevel),
+		levelStringToLevel(syslogLevel),
+		filePath,
+		levelStringToLevel(fileLevel),
 	)
 }
 

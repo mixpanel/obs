@@ -2,7 +2,6 @@ package metrics
 
 import (
 	"bytes"
-	"flags"
 	"fmt"
 	"log"
 	"net"
@@ -58,15 +57,10 @@ type Stopwatch interface {
 	Stop()
 }
 
-func NewDefault() (Receiver, error) {
-	address := flags.MetricsEndpoint
-	if address == "" {
+func New(addr string) (Receiver, error) {
+	if addr == "" {
 		return Null, nil
 	}
-	return NewMetrics(address)
-}
-
-func NewMetrics(addr string) (Receiver, error) {
 	conn, err := net.Dial("udp", addr)
 	if err != nil {
 		return nil, err

@@ -158,7 +158,7 @@ func (sink *udpSink) readAll() string {
 
 func newTestMetrics(t *testing.T) (Receiver, *udpSink) {
 	sink := newUDPSink()
-	metrics, err := NewMetrics(sink.address)
+	metrics, err := New(sink.address)
 	assert.Nil(t, err)
 	return metrics, sink
 }

@@ -1,6 +1,6 @@
 package logging
 
-var NullLogger Logger = nullLogger(struct{}{})
+var Null Logger = nullLogger(struct{}{})
 
 type nullLogger struct{}
 
