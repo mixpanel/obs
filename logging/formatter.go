@@ -5,15 +5,21 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"os"
 	"regexp"
 )
 
 var textVariableReplacementRegex = regexp.MustCompile("{{[a-zA-Z0-9_]+}}")
+var myPid = os.Getpid()
 
 func textFormatter(lvl level, message string, fields Fields) string {
 	buffer := bytes.NewBuffer(make([]byte, 0, len(message)*2))
 
-	fmt.Fprintf(buffer, "[%s] %s: ", levelToString(lvl), fields["logger"])
+	if fields["logger"] == "" {
+		fmt.Fprintf(buffer, "pid=%d [%s]: ", myPid, levelToString(lvl))
+	} else {
+		fmt.Fprintf(buffer, "pid=%d [%s] %s: ", myPid, levelToString(lvl), fields["logger"])
+	}
 	formatMessage(buffer, message, fields)
 
 	return buffer.String()
