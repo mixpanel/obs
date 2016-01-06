@@ -62,6 +62,3 @@ func (mock *mockMetrics) StartStopwatch(name string) metrics.Stopwatch {
 func newMockMetrics() *mockMetrics {
 	return &mockMetrics{}
 }
-
-func (mock *mockMetrics) Close() {
-}

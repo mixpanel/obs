@@ -10,6 +10,7 @@ import (
 )
 
 var Log logging.Logger = logging.Null
+var Sink metrics.Sink = metrics.NullSink
 var Metrics metrics.Receiver = metrics.Null
 
 type ObsOptions struct {
@@ -31,11 +32,13 @@ func NewOptions(parser *flags.Parser) *ObsOptions {
 
 func (opts *ObsOptions) Init(metricsPrefix string) {
 	Log = logging.New(opts.SyslogLevel, opts.LogLevel, opts.LogPath)
-	metricsReceiver, err := metrics.New(opts.MetricsEndpoint)
-	if err != nil {
+
+	if sink, err := metrics.NewSink(opts.MetricsEndpoint); err != nil {
 		Log.Errorf("error initializing metrics: {{error_message}}", logging.Fields{}.WithError(err))
 	} else {
-		Metrics = metricsReceiver.ScopePrefix(metricsPrefix)
+		Sink = sink
+		receiver := metrics.NewReceiver(Sink)
+		Metrics = receiver.ScopePrefix(metricsPrefix)
 		ReportGCMetrics(3*time.Second, Metrics)
 		ReportVersion(Metrics)
 		ReportUptime(Metrics)
