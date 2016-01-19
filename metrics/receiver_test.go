@@ -80,21 +80,21 @@ func TestCounterWithTags(t *testing.T) {
 	metrics, endpoint := newTestMetrics(t)
 	tags := Tags{"aKey": "aValue", "aKey2": "aValue2"}
 	metrics.ScopeTags(Tags{"aKey": "aValue", "aKey2": "aValue2"}).Incr("test_counter")
-	assert.Equal(t, tags, parseTags(endpoint.readAll()))
+	assert.Equal(t, tags, parseStatsdTags(endpoint.readAll()))
 }
 
 func TestStatWithTags(t *testing.T) {
 	metrics, endpoint := newTestMetrics(t)
 	tags := Tags{"aKey": "aValue", "aKey2": "aValue2"}
 	metrics.ScopeTags(Tags{"aKey": "aValue", "aKey2": "aValue2"}).AddStat("test_stat", 1.2345)
-	assert.Equal(t, tags, parseTags(endpoint.readAll()))
+	assert.Equal(t, tags, parseStatsdTags(endpoint.readAll()))
 }
 
 func TestSetGaugeWithTags(t *testing.T) {
 	metrics, endpoint := newTestMetrics(t)
 	tags := Tags{"aKey": "aValue", "aKey2": "aValue2"}
 	metrics.ScopeTags(tags).SetGauge("test_gauge", 4.321)
-	assert.Equal(t, tags, parseTags(endpoint.readAll()))
+	assert.Equal(t, tags, parseStatsdTags(endpoint.readAll()))
 }
 
 func TestScopeOverridesTags(t *testing.T) {
@@ -104,11 +104,11 @@ func TestScopeOverridesTags(t *testing.T) {
 
 	metrics = metrics.ScopeTags(tags1)
 	metrics.Incr("test")
-	assert.Equal(t, tags1, parseTags(endpoint.readAll()))
+	assert.Equal(t, tags1, parseStatsdTags(endpoint.readAll()))
 
 	metrics = metrics.ScopeTags(tags2)
 	metrics.Incr("test")
-	assert.Equal(t, tags2, parseTags(endpoint.readAll()))
+	assert.Equal(t, tags2, parseStatsdTags(endpoint.readAll()))
 }
 
 func TestScopePrefix(t *testing.T) {
@@ -165,12 +165,12 @@ func (endpoint *udpEndpoint) readAll() string {
 
 func newTestMetrics(t *testing.T) (Receiver, *udpEndpoint) {
 	endpoint := newUDPEndpoint()
-	sink, err := NewSink(endpoint.address)
+	sink, err := NewStatsdSink(endpoint.address)
 	assert.Nil(t, err)
 	return NewReceiver(sink), endpoint
 }
 
-func parseTags(line string) Tags {
+func parseStatsdTags(line string) Tags {
 	tags := make(map[string]string)
 	parts := strings.Split(line, "|")
 	if len(parts) == 0 {

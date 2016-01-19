@@ -2,20 +2,9 @@ package metrics
 
 import (
 	"log"
-	"sort"
 	"sync"
 	"time"
 )
-
-type metricType string
-
-const (
-	metricTypeCounter = metricType("ct")
-	metricTypeStat    = metricType("h")
-	metricTypeGauge   = metricType("g")
-)
-
-type Tags map[string]string
 
 type Receiver interface {
 	Incr(name string)
@@ -44,30 +33,6 @@ type receiver struct {
 var Null Receiver = &receiver{
 	scopes: make(map[string]*receiver),
 	sink:   NullSink,
-}
-
-func formatName(prefix string, name string) string {
-	formatted := prefix
-	if len(name) > 0 && len(prefix) > 0 {
-		formatted += "."
-	}
-	return formatted + name
-}
-
-func formatTags(tags Tags) string {
-	keys := make([]string, 0, len(tags))
-	for key, _ := range tags {
-		keys = append(keys, key)
-	}
-	sort.Strings(keys)
-
-	formatted := ""
-
-	for _, key := range keys {
-		formatted += key + ":" + tags[key] + ","
-	}
-
-	return formatted
 }
 
 func (r *receiver) handle(name string, value float64, metricType metricType) {

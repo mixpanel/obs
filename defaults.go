@@ -33,7 +33,7 @@ func NewOptions(parser *flags.Parser) *ObsOptions {
 func (opts *ObsOptions) Init(metricsPrefix string) {
 	Log = logging.New(opts.SyslogLevel, opts.LogLevel, opts.LogPath)
 
-	if sink, err := metrics.NewSink(opts.MetricsEndpoint); err != nil {
+	if sink, err := metrics.NewStatsdSink(opts.MetricsEndpoint); err != nil {
 		Log.Errorf("error initializing metrics: {{error_message}}", logging.Fields{}.WithError(err))
 	} else {
 		Sink = sink
