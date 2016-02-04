@@ -36,6 +36,7 @@ func BenchmarkHandleStats(b *testing.B) {
 
 	sink := &statsdSink{
 		metrics: ch,
+		flushes: make(chan struct{}),
 	}
 
 	r := &receiver{

@@ -15,6 +15,7 @@ var batchSizeBytes = 4096
 
 type statsdSink struct {
 	metrics       chan *bytes.Buffer
+	flushes       chan struct{}
 	wg            *sync.WaitGroup
 	conn          net.Conn
 	flushInterval time.Duration
@@ -64,7 +65,7 @@ func (sink *statsdSink) Handle(metric string, tags Tags, value float64, metricTy
 }
 
 func (sink *statsdSink) Flush() error {
-	sink.metrics <- nil
+	sink.flushes <- struct{}{}
 	return nil
 }
 
@@ -85,24 +86,19 @@ func (sink *statsdSink) flusher() {
 
 	for {
 		select {
-		case stat, ok := <-sink.metrics:
-			if !ok {
-				// channel is closed
+		case stat := <-sink.metrics:
+			_, _ = stat.WriteTo(buffer)
+
+			util.SharedBufferPool.Put(stat)
+			_, _ = buffer.WriteString("\n")
+
+			if buffer.Len() > batchSizeBytes {
 				flushBuffer()
-				return
 			}
-
-			if stat == nil {
-				flushBuffer()
-			} else {
-				_, _ = stat.WriteTo(buffer)
-
-				util.SharedBufferPool.Put(stat)
-				_, _ = buffer.WriteString("\n")
-
-				if buffer.Len() > batchSizeBytes {
-					flushBuffer()
-				}
+		case _, ok := <-sink.flushes:
+			flushBuffer()
+			if !ok {
+				return
 			}
 		case _ = <-nextFlush:
 			flushBuffer()
@@ -112,7 +108,7 @@ func (sink *statsdSink) flusher() {
 }
 
 func (sink *statsdSink) Close() {
-	close(sink.metrics)
+	close(sink.flushes)
 	sink.wg.Wait()
 }
 
@@ -128,6 +124,7 @@ func NewStatsdSink(addr string) (Sink, error) {
 	wg := &sync.WaitGroup{}
 	sink := &statsdSink{
 		metrics:       make(chan *bytes.Buffer, 128),
+		flushes:       make(chan struct{}),
 		wg:            wg,
 		conn:          conn,
 		flushInterval: 5 * time.Second,
