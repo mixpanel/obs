@@ -70,7 +70,7 @@ func (r *receiver) Scope(prefix string, tags Tags) Receiver {
 		return r
 	}
 
-	tagsString := formatTags(tags)
+	tagsString := FormatTags(tags)
 
 	key := prefix + "|" + tagsString
 

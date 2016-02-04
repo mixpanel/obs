@@ -3,11 +3,45 @@ package metrics
 import (
 	"fmt"
 	"math"
+	"math/rand"
 	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 )
+
+func BenchmarkLocalSinkCounters(b *testing.B) {
+	sink := NewLocalSink(NullSink)
+	for i := 0; i < b.N; i++ {
+		sink.Handle(fmt.Sprintf("metric_%d", rand.Intn(10)), Tags{
+			"a": "A",
+			"b": "B",
+		}, rand.Float64(), "ct")
+	}
+}
+
+func BenchmarkLocalSinkStats(b *testing.B) {
+	sink := NewLocalSink(NullSink)
+	for i := 0; i < b.N; i++ {
+		sink.Handle(fmt.Sprintf("metric_%d", rand.Intn(10)), Tags{
+			"a": "A",
+			"b": "B",
+		}, rand.Float64(), "h")
+	}
+}
+
+func BenchmarkLocalSinkFlush(b *testing.B) {
+	sink := NewLocalSink(NullSink)
+
+	for i := 0; i < 1000; i++ {
+		sink.Handle(fmt.Sprintf("counter_%d", i), nil, 1.0, "ct")
+		sink.Handle(fmt.Sprintf("stat_%d", i), nil, rand.Float64(), "h")
+	}
+
+	for i := 0; i < b.N; i++ {
+		sink.Flush()
+	}
+}
 
 func TestLocalSinkCounter(t *testing.T) {
 	local, test := newLocalTestSink()
@@ -147,7 +181,7 @@ type testSink struct {
 }
 
 func formatMetric(metric string, tags Tags, value float64, metricType metricType) string {
-	return fmt.Sprintf("%s %s %g %s", metric, formatTags(tags), value, metricType)
+	return fmt.Sprintf("%s %s %g %s", metric, FormatTags(tags), value, metricType)
 }
 
 func (sink *testSink) Handle(metric string, tags Tags, value float64, metricType metricType) error {

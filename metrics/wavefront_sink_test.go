@@ -27,7 +27,7 @@ func TestWavefrontSinkWithoutTags(t *testing.T) {
 
 	assert.Equal(t, len(split), 4)
 	assert.Equal(t, "test.metric", split[0])
-	assert.Equal(t, "10", split[1])
+	assert.Equal(t, "10.000000", split[1])
 	assert.Equal(t, "host=localhost", split[3])
 }
 
@@ -52,7 +52,7 @@ func TestWavefrontSinkWithTags(t *testing.T) {
 
 	assert.Equal(t, len(split), 6)
 	assert.Equal(t, "test.metric", split[0])
-	assert.Equal(t, "10", split[1])
+	assert.Equal(t, "10.000000", split[1])
 	assert.Equal(t, "host=localhost", split[3])
 
 	mp := map[string]bool{

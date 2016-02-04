@@ -9,6 +9,7 @@ import (
 	"net"
 	"sync"
 	"time"
+	"util"
 )
 
 type wavefrontSink struct {
@@ -24,13 +25,13 @@ func (sink *wavefrontSink) Handle(metric string, tags Tags, value float64, metri
 		return errors.New("cannot handle empty metric")
 	}
 
-	buf := sharedBufferPool.get()
-	defer sharedBufferPool.put(buf)
+	buf := util.SharedBufferPool.Get()
+	defer util.SharedBufferPool.Put(buf)
 
 	// wavefront format: <metricName> <metricValue> [optionalTimestampInEpochSeconds] host=<host> [tag1=value1 tag2=value2 ... ]
 	_, _ = buf.WriteString(metric)
 	_, _ = buf.WriteString(" ")
-	if _, err := fmt.Fprintf(buf, "%g %d ", value, time.Now().Unix()); err != nil {
+	if _, err := fmt.Fprintf(buf, "%0.6f %d ", value, time.Now().Unix()); err != nil {
 		return err
 	}
 	_, _ = buf.WriteString("host=")

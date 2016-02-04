@@ -21,7 +21,7 @@ func (sink *localSink) Handle(metric string, tags Tags, value float64, metricTyp
 		return errors.New("cannot handle empty metric")
 	}
 
-	formatted := metric + "|" + formatTags(tags)
+	formatted := metric + "|" + FormatTags(tags)
 
 	switch metricType {
 	case metricTypeCounter:
@@ -33,7 +33,7 @@ func (sink *localSink) Handle(metric string, tags Tags, value float64, metricTyp
 	case metricTypeStat:
 		// TODO: Create a windowed histogram.
 		// alpha value copied from go-metrics exmaples
-		sample := _metrics.NewExpDecaySample(16000, 0.015)
+		sample := _metrics.NewExpDecaySample(4096, 0.015)
 		stat := _metrics.GetOrRegisterHistogram(formatted, sink.stats, sample)
 		stat.Update(int64(value))
 	default:
@@ -52,7 +52,7 @@ func (sink *localSink) Flush() error {
 
 		metricName := strings.TrimSpace(split[0])
 
-		tags, err := parseTags(strings.TrimSpace(split[1]))
+		tags, err := ParseTags(strings.TrimSpace(split[1]))
 		if err != nil {
 			log.Printf("could not parse tags: %s", split[1])
 			return
@@ -86,6 +86,7 @@ func (sink *localSink) Flush() error {
 }
 
 func (sink *localSink) Close() {
+	sink.Flush()
 	sink.counters.UnregisterAll()
 	sink.gauges.UnregisterAll()
 	sink.stats.UnregisterAll()

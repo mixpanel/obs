@@ -8,6 +8,7 @@ import (
 	"net"
 	"sync"
 	"time"
+	"util"
 )
 
 var batchSizeBytes = 4096
@@ -20,10 +21,10 @@ type statsdSink struct {
 }
 
 func (sink *statsdSink) Handle(metric string, tags Tags, value float64, metricType metricType) (err error) {
-	buf := sharedBufferPool.get()
+	buf := util.SharedBufferPool.Get()
 	defer func() {
 		if err != nil {
-			sharedBufferPool.put(buf)
+			util.SharedBufferPool.Put(buf)
 		}
 	}()
 
@@ -96,7 +97,7 @@ func (sink *statsdSink) flusher() {
 			} else {
 				_, _ = stat.WriteTo(buffer)
 
-				sharedBufferPool.put(stat)
+				util.SharedBufferPool.Put(stat)
 				_, _ = buffer.WriteString("\n")
 
 				if buffer.Len() > batchSizeBytes {

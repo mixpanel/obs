@@ -25,7 +25,7 @@ func formatName(prefix string, name string) string {
 
 // used by receivers and sinks to convert a map of tags into a string that can be
 // used as a map key
-func formatTags(tags Tags) string {
+func FormatTags(tags Tags) string {
 	keys := make([]string, 0, len(tags))
 	for key, _ := range tags {
 		keys = append(keys, key)
@@ -42,7 +42,7 @@ func formatTags(tags Tags) string {
 }
 
 // converts a string formatted using formatTags(see above) into a map of tags
-func parseTags(tagString string) (map[string]string, error) {
+func ParseTags(tagString string) (map[string]string, error) {
 	split := strings.Split(tagString, ",")
 	tags := make(map[string]string, len(split))
 
