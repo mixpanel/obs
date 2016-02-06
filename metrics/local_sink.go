@@ -33,9 +33,12 @@ func (sink *localSink) Handle(metric string, tags Tags, value float64, metricTyp
 	case metricTypeStat:
 		// TODO: Create a windowed histogram.
 		// alpha value copied from go-metrics exmaples
-		sample := _metrics.NewExpDecaySample(4096, 0.015)
-		stat := _metrics.GetOrRegisterHistogram(formatted, sink.stats, sample)
-		stat.Update(int64(value))
+		stat := sink.stats.Get(formatted)
+		if stat == nil {
+			sample := _metrics.NewExpDecaySample(4096, 0.015)
+			stat = _metrics.GetOrRegisterHistogram(formatted, sink.stats, sample)
+		}
+		stat.(_metrics.Histogram).Update(int64(value))
 	default:
 		return errors.New(fmt.Sprintf("unknown metric type: %s", metricType))
 	}
