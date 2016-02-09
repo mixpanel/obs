@@ -5,15 +5,25 @@ import (
 	"fmt"
 	"log"
 	"strings"
+	"sync"
 
 	_metrics "github.com/rcrowley/go-metrics"
 )
+
+type value struct {
+	value        int64
+	unchangedFor int
+}
 
 type localSink struct {
 	counters _metrics.Registry
 	gauges   _metrics.Registry
 	stats    _metrics.Registry
 	dst      Sink
+
+	flushLock      sync.Mutex
+	flushThreshold int
+	flushedValues  map[string]*value
 }
 
 func (sink *localSink) Handle(metric string, tags Tags, value float64, metricType metricType) error {
@@ -45,7 +55,25 @@ func (sink *localSink) Handle(metric string, tags Tags, value float64, metricTyp
 	return nil
 }
 
+// The current implementation will not flush a counter if it was updated but the value remained the same (possibly because of an incr(0) or
+// incr(-X) followed by incr(+X).
+// TODO: Fix this if it starts becoming a problem.
+// NOTE: Caller should acquire sink.flushLock before invoking this function.
+func (sink *localSink) shouldFlush(name string, v int64) bool {
+	oldValue, ok := sink.flushedValues[name]
+	if !ok || oldValue.value != v {
+		sink.flushedValues[name] = &value{v, 1}
+		return true
+	}
+
+	oldValue.unchangedFor++
+	return oldValue.unchangedFor <= sink.flushThreshold
+}
+
 func (sink *localSink) Flush() error {
+	sink.flushLock.Lock()
+	defer sink.flushLock.Unlock()
+
 	flush := func(name string, i interface{}) {
 		split := strings.Split(name, "|")
 		if len(split) != 2 {
@@ -63,18 +91,22 @@ func (sink *localSink) Flush() error {
 
 		switch metric := i.(type) {
 		case _metrics.Counter:
-			sink.dst.Handle(metricName, tags, float64(metric.Count()), metricTypeGauge)
+			if sink.shouldFlush(name, metric.Count()) {
+				sink.dst.Handle(metricName, tags, float64(metric.Count()), metricTypeGauge)
+			}
 		case _metrics.GaugeFloat64:
 			sink.dst.Handle(metricName, tags, float64(metric.Value()), metricTypeGauge)
 		case _metrics.Histogram:
 			h := metric.Snapshot()
 			p := h.Percentiles([]float64{0.5000, 0.9000, 0.9900})
-			sink.dst.Handle(metricName+".count", tags, float64(h.Count()), metricTypeGauge)
-			sink.dst.Handle(metricName+".max", tags, float64(h.Max()), metricTypeGauge)
-			sink.dst.Handle(metricName+".median", tags, p[0], metricTypeGauge)
-			sink.dst.Handle(metricName+".avg", tags, h.Mean(), metricTypeGauge)
-			sink.dst.Handle(metricName+".90percentile", tags, p[1], metricTypeGauge)
-			sink.dst.Handle(metricName+".99percentile", tags, p[2], metricTypeGauge)
+			if sink.shouldFlush(name+".count", h.Count()) {
+				sink.dst.Handle(metricName+".count", tags, float64(h.Count()), metricTypeGauge)
+				sink.dst.Handle(metricName+".max", tags, float64(h.Max()), metricTypeGauge)
+				sink.dst.Handle(metricName+".median", tags, p[0], metricTypeGauge)
+				sink.dst.Handle(metricName+".avg", tags, h.Mean(), metricTypeGauge)
+				sink.dst.Handle(metricName+".90percentile", tags, p[1], metricTypeGauge)
+				sink.dst.Handle(metricName+".99percentile", tags, p[2], metricTypeGauge)
+			}
 		default:
 			// Ignore all other metrics
 		}
@@ -95,11 +127,14 @@ func (sink *localSink) Close() {
 	sink.stats.UnregisterAll()
 }
 
-func NewLocalSink(dst Sink) Sink {
+func NewLocalSink(dst Sink, flushThreshold int) Sink {
 	return &localSink{
 		counters: _metrics.NewRegistry(),
 		gauges:   _metrics.NewRegistry(),
 		stats:    _metrics.NewRegistry(),
 		dst:      dst,
+
+		flushThreshold: flushThreshold,
+		flushedValues:  make(map[string]*value),
 	}
 }

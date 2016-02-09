@@ -11,7 +11,7 @@ import (
 )
 
 func BenchmarkLocalSinkCounters(b *testing.B) {
-	sink := NewLocalSink(NullSink)
+	sink := NewLocalSink(NullSink, 1e18)
 	for i := 0; i < b.N; i++ {
 		sink.Handle(fmt.Sprintf("metric_%d", rand.Intn(10)), Tags{
 			"a": "A",
@@ -21,7 +21,7 @@ func BenchmarkLocalSinkCounters(b *testing.B) {
 }
 
 func BenchmarkLocalSinkStats(b *testing.B) {
-	sink := NewLocalSink(NullSink)
+	sink := NewLocalSink(NullSink, 1e18)
 	for i := 0; i < b.N; i++ {
 		sink.Handle(fmt.Sprintf("metric_%d", rand.Intn(10)), Tags{
 			"a": "A",
@@ -31,7 +31,7 @@ func BenchmarkLocalSinkStats(b *testing.B) {
 }
 
 func BenchmarkLocalSinkFlush(b *testing.B) {
-	sink := NewLocalSink(NullSink)
+	sink := NewLocalSink(NullSink, 1e18)
 
 	for i := 0; i < 1000; i++ {
 		sink.Handle(fmt.Sprintf("counter_%d", i), nil, 1.0, "ct")
@@ -51,6 +51,30 @@ func TestLocalSinkCounter(t *testing.T) {
 
 	assert.Equal(t, 1, len(test.stats))
 	assert.Equal(t, formatMetric("test", nil, 2, metricTypeGauge), test.stats[0])
+}
+
+func TestLocalSinkCounterWithFlushThreshold(t *testing.T) {
+	test := &testSink{}
+	local := NewLocalSink(test, 1)
+
+	local.Handle("test", nil, 1, metricTypeCounter)
+
+	local.Flush()
+
+	// The second flush should be a no-op because the value hasn't changed
+	assert.Equal(t, 1, len(test.stats))
+	assert.Equal(t, formatMetric("test", nil, 1, metricTypeGauge), test.stats[0])
+
+	local.Flush()
+	// The second flush should be a no-op because the value hasn't changed
+	assert.Equal(t, 1, len(test.stats))
+	assert.Equal(t, formatMetric("test", nil, 1, metricTypeGauge), test.stats[0])
+
+	local.Handle("test", nil, 1, metricTypeCounter)
+	local.Flush()
+
+	assert.Equal(t, 2, len(test.stats))
+	assert.Equal(t, formatMetric("test", nil, 2, metricTypeGauge), test.stats[1])
 }
 
 func TestLocalSinkCounterWithTags(t *testing.T) {
@@ -172,7 +196,7 @@ func TestLocalSinkStatWithTags(t *testing.T) {
 
 func newLocalTestSink() (Sink, *testSink) {
 	dst := &testSink{}
-	local := NewLocalSink(dst)
+	local := NewLocalSink(dst, 1e18)
 	return local, dst
 }
 
