@@ -67,6 +67,7 @@ func newLogger(syslogLevel level, filepath string, fileLevel level) *logger {
 		syslogger, err := syslog.New(syslog.LOG_USER|syslog.LOG_NOTICE, "")
 		if err != nil {
 			initError(fmt.Sprintf("Unable to open syslog: %v.", err))
+			log.syslogLevel = levelNever
 		} else {
 			log.syslog = syslogger
 		}
