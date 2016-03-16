@@ -41,7 +41,7 @@ func formatMessage(buffer *bytes.Buffer, message string, fields Fields) {
 		count++
 		buffer.WriteString(k)
 		buffer.WriteByte('=')
-		fmt.Fprintf(buffer, "%q", fields[k])
+		fmt.Fprintf(buffer, "%v", fields[k])
 		if count < len {
 			buffer.WriteString(", ")
 		}
