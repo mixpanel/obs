@@ -15,7 +15,7 @@ func TestLoggerWrites(t *testing.T) {
 	buf := &bytes.Buffer{}
 	logger := testLogger(buf)
 	logger.Infof("test", Fields{"key": "value"})
-	assert.Contains(t, buf.String(), `key="value"`)
+	assert.Contains(t, buf.String(), `key=value`)
 }
 
 func TestLoggerNamed(t *testing.T) {
