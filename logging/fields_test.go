@@ -37,19 +37,6 @@ func TestWithError(t *testing.T) {
 	assert.Equal(t, "message", fields["error_message"])
 }
 
-func TestPopulateStandardFields(t *testing.T) {
-	fields := Fields{}
-	savedLocalFields := localhostFields
-	defer func() {
-		localhostFields = savedLocalFields
-	}()
-	localhostFields = Fields{"localhostKey": "value"}
-	fields.populateStandardFields(levelDebug, "test logger")
-	assert.Equal(t, "DEBUG", fields["level"])
-	assert.Equal(t, "test logger", fields["logger"])
-	assert.Equal(t, "value", fields["localhostKey"])
-}
-
 func TestLocalhostFields(t *testing.T) {
 	assert.NotNil(t, localhostFields)
 	assert.NotNil(t, localhostFields["pid"])

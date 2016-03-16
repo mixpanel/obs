@@ -1,6 +1,7 @@
 package logging
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -176,11 +177,23 @@ func (l *logger) IsCritical() bool {
 }
 
 func (l *logger) logAtLevel(lvl level, message string, fields Fields) {
-	fields.populateStandardFields(lvl, l.name)
+	formattedMessage := textFormatter(lvl, l.name, message, fields)
+
 	if l.gologgerLevel <= lvl {
-		golog.Println(textFormatter(lvl, message, fields))
+		golog.Println(formattedMessage)
 	}
 	if l.syslogLevel <= lvl {
-		io.WriteString(l.syslog, "mixpanel "+jsonFormatter(levelDebug, message, fields))
+		fields.Update(localhostFields)
+		delete(fields, "hostname") // added by logstash
+		fields["logger"] = l.name
+		fields["level"] = levelToString(lvl)
+		fields["message"] = formattedMessage
+
+		payload, err := json.Marshal(fields)
+		if err != nil {
+			payload = []byte(`{"level": "ERROR", "message": "Failed to serialize to JSON."}`)
+		}
+
+		io.WriteString(l.syslog, "mixpanel "+string(payload))
 	}
 }
