@@ -87,24 +87,35 @@ func (sink *statsdSink) flusher() {
 	for {
 		select {
 		case stat := <-sink.metrics:
-			_, _ = stat.WriteTo(buffer)
-
-			util.SharedBufferPool.Put(stat)
-			_, _ = buffer.WriteString("\n")
-
+			writeStatToBuffer(stat, buffer)
 			if buffer.Len() > batchSizeBytes {
 				flushBuffer()
 			}
 		case _, ok := <-sink.flushes:
-			flushBuffer()
 			if !ok {
-				return
+				// drain the metrics channel
+				for {
+					select {
+					case stat := <-sink.metrics:
+						writeStatToBuffer(stat, buffer)
+					default:
+						flushBuffer()
+						return
+					}
+				}
 			}
+			flushBuffer()
 		case _ = <-nextFlush:
 			flushBuffer()
 			nextFlush = time.After(sink.flushInterval)
 		}
 	}
+}
+
+func writeStatToBuffer(stat, buffer *bytes.Buffer) {
+	_, _ = stat.WriteTo(buffer)
+	_, _ = buffer.WriteString("\n")
+	util.SharedBufferPool.Put(stat)
 }
 
 func (sink *statsdSink) Close() {
