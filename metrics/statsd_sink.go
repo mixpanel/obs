@@ -75,11 +75,15 @@ func (sink *statsdSink) flusher() {
 
 	buffer := &bytes.Buffer{}
 	flushBuffer := func() error {
-		if buffer.Len() > 0 {
-			if _, err := sink.conn.Write(buffer.Bytes()); err != nil {
+		data := buffer.Next(buffer.Len())
+		buffer.Reset()
+		for written := 0; written < len(data); {
+			n, err := sink.conn.Write(data[written:])
+			if err != nil {
 				log.Printf("error while writing to statsd: %v", err)
+				return err
 			}
-			buffer.Reset()
+			written += n
 		}
 		return nil
 	}

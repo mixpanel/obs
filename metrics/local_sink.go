@@ -102,6 +102,7 @@ func (sink *localSink) Flush() error {
 			if sink.shouldFlush(name+".count", h.Count()) {
 				sink.dst.Handle(metricName+".count", tags, float64(h.Count()), metricTypeGauge)
 				sink.dst.Handle(metricName+".max", tags, float64(h.Max()), metricTypeGauge)
+				sink.dst.Handle(metricName+".min", tags, float64(h.Min()), metricTypeGauge)
 				sink.dst.Handle(metricName+".median", tags, p[0], metricTypeGauge)
 				sink.dst.Handle(metricName+".avg", tags, h.Mean(), metricTypeGauge)
 				sink.dst.Handle(metricName+".90percentile", tags, p[1], metricTypeGauge)
