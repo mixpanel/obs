@@ -150,6 +150,7 @@ func TestLocalSinkStat(t *testing.T) {
 		formatMetric("test.median", nil, 50, metricTypeGauge):       true,
 		formatMetric("test.90percentile", nil, 90, metricTypeGauge): true,
 		formatMetric("test.99percentile", nil, 99, metricTypeGauge): true,
+		formatMetric("test._dropped", nil, 0, metricTypeGauge):      true,
 	}
 
 	mpStats := make(map[string]bool)
@@ -184,6 +185,7 @@ func TestLocalSinkStatWithTags(t *testing.T) {
 		formatMetric("test.median", Tags{"a": "b"}, 50, metricTypeGauge):       true,
 		formatMetric("test.90percentile", Tags{"a": "b"}, 90, metricTypeGauge): true,
 		formatMetric("test.99percentile", Tags{"a": "b"}, 99, metricTypeGauge): true,
+		formatMetric("test._dropped", Tags{"a": "b"}, 0, metricTypeGauge):      true,
 	}
 
 	mpStats := make(map[string]bool)

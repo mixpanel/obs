@@ -6,6 +6,7 @@ import (
 	"log"
 	"strings"
 	"sync"
+	"time"
 
 	_metrics "github.com/rcrowley/go-metrics"
 )
@@ -41,11 +42,9 @@ func (sink *localSink) Handle(metric string, tags Tags, value float64, metricTyp
 		gauge := _metrics.GetOrRegisterGaugeFloat64(formatted, sink.gauges)
 		gauge.Update(value)
 	case metricTypeStat:
-		// TODO: Create a windowed histogram.
-		// alpha value copied from go-metrics exmaples
 		stat := sink.stats.Get(formatted)
 		if stat == nil {
-			sample := _metrics.NewExpDecaySample(4096, 0.015)
+			sample := _metrics.NewTimeWindowSample(4096, 8192, 300*time.Second)
 			stat = _metrics.GetOrRegisterHistogram(formatted, sink.stats, sample)
 		}
 		stat.(_metrics.Histogram).Update(int64(value))
@@ -107,6 +106,7 @@ func (sink *localSink) Flush() error {
 				sink.dst.Handle(metricName+".avg", tags, h.Mean(), metricTypeGauge)
 				sink.dst.Handle(metricName+".90percentile", tags, p[1], metricTypeGauge)
 				sink.dst.Handle(metricName+".99percentile", tags, p[2], metricTypeGauge)
+				sink.dst.Handle(metricName+"._dropped", tags, float64(h.Dropped()), metricTypeGauge)
 			}
 		default:
 			// Ignore all other metrics
