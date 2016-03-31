@@ -55,6 +55,23 @@ func (sink *wavefrontSink) Handle(metric string, tags Tags, value float64, metri
 	return nil
 }
 
+func send(address string, data []byte) error {
+	toSend := bytes.NewBuffer(data)
+	conn, err := net.Dial("tcp", address)
+	if err != nil {
+		e := fmt.Errorf("error while connecting to %s: %v", address, err)
+		log.Printf(e.Error())
+		return e
+	}
+	defer conn.Close()
+	if _, err := toSend.WriteTo(conn); err != nil {
+		e := fmt.Errorf("error while writing data to %s: %v", address, err)
+		log.Printf(e.Error())
+		return e
+	}
+	return nil
+}
+
 func (sink *wavefrontSink) Flush() error {
 	sink.mutex.Lock()
 	sendBuffer := &bytes.Buffer{}
@@ -62,22 +79,22 @@ func (sink *wavefrontSink) Flush() error {
 	sink.buffer.Reset()
 	sink.mutex.Unlock()
 
-	if sendBuffer.Len() > 0 {
-		idx := rand.Intn(len(sink.hostPorts))
-		conn, err := net.Dial("tcp", sink.hostPorts[idx])
-		if err != nil {
-			e := fmt.Errorf("error while connecting to %s: %v", sink.hostPorts[idx], err)
-			log.Printf(e.Error())
-			return e
-		}
-		defer conn.Close()
-		if _, err := sendBuffer.WriteTo(conn); err != nil {
-			e := fmt.Errorf("error while writing data to %s: %v", sink.hostPorts[idx], err)
-			log.Printf(e.Error())
-			return e
+	if sendBuffer.Len() == 0 {
+		return nil
+	}
+
+	var err error
+
+	idx := rand.Intn(len(sink.hostPorts))
+	for i := 0; i < len(sink.hostPorts); i++ {
+		if err = send(sink.hostPorts[idx], sendBuffer.Bytes()); err == nil {
+			return nil
+		} else {
+			idx = (idx + 1) % len(sink.hostPorts)
 		}
 	}
-	return nil
+
+	return err
 }
 
 func (sink *wavefrontSink) Close() {
