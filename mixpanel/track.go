@@ -1,84 +1,176 @@
 package mixpanel
 
 import (
+	"bytes"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"log"
+	"io"
+	"io/ioutil"
+	"net/http"
 	"net/url"
+	"time"
 )
 
-var TrackUrl *url.URL
-
-type Client struct {
-	token string
+type Client interface {
+	Track(e *TrackedEvent) error
+	TrackBatched(es []*TrackedEvent) error
+	Import(es []*TrackedEvent) error
+	UrlWithTracking(e *TrackedEvent, dest string) (*url.URL, error)
 }
 
-type event struct {
-	Name       string                 `json:"event"`
-	Properties map[string]interface{} `json:"properties"`
+type client struct {
+	token   string
+	apiKey  string
+	baseUrl string
+	api     *http.Client
 }
 
-func init() {
-	var err error
-	TrackUrl, err = url.ParseRequestURI("http://api.mixpanel.com/track/")
+type TrackedEvent struct {
+	EventName  string
+	DistinctID string
+	Time       time.Time
+	Properties map[string]interface{}
+}
+
+func NewClient(token, apiKey, baseUrl string) Client {
+	return &client{
+		token:   token,
+		apiKey:  apiKey,
+		baseUrl: baseUrl,
+		api:     &http.Client{},
+	}
+}
+
+func (c *client) TrackBatched(es []*TrackedEvent) error {
+	return c.track(es)
+}
+
+func (c *client) Track(e *TrackedEvent) error {
+	return c.track([]*TrackedEvent{e})
+}
+
+func (c *client) track(es []*TrackedEvent) error {
+	if len(c.token) == 0 {
+		return fmt.Errorf("token is empty")
+	}
+
+	for _, e := range es {
+		if e.Time.IsZero() {
+			e.Time = time.Now()
+		}
+	}
+
+	data, err := c.encodeEvent(es)
 	if err != nil {
-		log.Fatalf("cannot parse mixpanel TrackUrl: %s", err)
-	}
-}
-
-func NewClient(token string) (*Client, error) {
-	if token == "" {
-		return nil, fmt.Errorf("token must not be empty")
-	}
-	return &Client{
-		token,
-	}, nil
-}
-
-func (c *Client) Track(eventName string, properties map[string]interface{}) bool {
-	//TODO
-	return false
-}
-
-// Returns the base64 encoded event json object
-func (c *Client) EncodeEvent(eventName string, properties map[string]interface{}) (string, error) {
-	if eventName == "" {
-		return "", fmt.Errorf("eventName cannot be empty")
+		return err
 	}
 
-	e := event{
-		Name:       eventName,
-		Properties: make(map[string]interface{}),
-	}
+	params := make(url.Values)
+	params.Set("data", data)
 
-	for k, v := range properties {
-		e.Properties[k] = v
-	}
-
-	e.Properties["token"] = c.token
-
-	jsonEncoded, err := json.Marshal(e)
+	req, err := http.NewRequest("POST", fmt.Sprintf("%s/track/", c.baseUrl), bytes.NewBufferString(params.Encode()))
 	if err != nil {
-		return "", err
+		return err
 	}
-
-	base64Encoded := base64.URLEncoding.EncodeToString(jsonEncoded)
-	return base64Encoded, nil
+	resp, err := c.api.Do(req)
+	if err != nil {
+		return err
+	}
+	if resp.StatusCode != http.StatusOK {
+		body, err := ioutil.ReadAll(resp.Body)
+		if err != nil {
+			return err
+		}
+		return fmt.Errorf("track returned status %d: %q", resp.Status, string(body))
+	}
+	_, _ = io.Copy(ioutil.Discard, resp.Body)
+	resp.Body.Close()
+	return nil
 }
 
-func (c *Client) UrlWithTracking(eventName string, properties map[string]interface{}, dest string) (*url.URL, error) {
-	data, err := c.EncodeEvent(eventName, properties)
+func (c *client) Import(events []*TrackedEvent) error {
+	if len(c.token) == 0 || len(c.apiKey) == 0 {
+		return fmt.Errorf("both token and API key must be specified")
+	}
+	data, err := c.encodeEvent(events)
+	if err != nil {
+		return err
+	}
+
+	params := make(url.Values)
+	params.Set("data", data)
+	params.Set("api_key", c.apiKey)
+	req, err := http.NewRequest("POST", fmt.Sprintf("%s/import/", c.baseUrl), bytes.NewBufferString(params.Encode()))
+	if err != nil {
+		return err
+	}
+	resp, err := c.api.Do(req)
+	if err != nil {
+		return err
+	}
+	if resp.StatusCode != http.StatusOK {
+		body, err := ioutil.ReadAll(resp.Body)
+		if err != nil {
+			return err
+		}
+		return fmt.Errorf("track returned status %d: %q", resp.Status, string(body))
+	}
+	_, _ = io.Copy(ioutil.Discard, resp.Body)
+	resp.Body.Close()
+	return nil
+}
+
+func (c *client) UrlWithTracking(event *TrackedEvent, dest string) (*url.URL, error) {
+	data, err := c.encodeEvent([]*TrackedEvent{event})
 	if err != nil {
 		return nil, err
 	}
 
-	trackCopy := *TrackUrl
+	trackCopy, err := url.ParseRequestURI(fmt.Sprintf("%s/track/", c.baseUrl))
+	if err != nil {
+		return nil, err
+	}
 	query := trackCopy.Query()
 	query.Set("data", data)
-	query.Set("redirect", dest)
+	if dest != "" {
+		query.Set("redirect", dest)
+	}
 	query.Set("ip", "1")
 	trackCopy.RawQuery = query.Encode()
 
-	return &trackCopy, nil
+	return trackCopy, nil
+}
+
+func (c *client) encodeEvent(es []*TrackedEvent) (string, error) {
+	var list []map[string]interface{}
+	for _, e := range es {
+		if e.EventName == "" {
+			return "", fmt.Errorf("EventName cannot be empty")
+		}
+
+		properties := e.Properties
+		if properties == nil {
+			properties = make(map[string]interface{})
+		}
+		properties["time"] = e.Time.Unix()
+		if len(e.DistinctID) != 0 {
+			properties["distinct_id"] = e.DistinctID
+		}
+		properties["token"] = c.token
+
+		list = append(list, map[string]interface{}{
+			"event":      e.EventName,
+			"properties": properties,
+		})
+	}
+
+	jsonEncoded, err := json.Marshal(list)
+
+	if err != nil {
+		return "", err
+	}
+
+	base64Encoded := base64.StdEncoding.EncodeToString(jsonEncoded)
+	return base64Encoded, nil
 }
