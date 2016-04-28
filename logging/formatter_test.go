@@ -25,9 +25,9 @@ type formattingTestCase struct {
 func TestMessageFormatting(t *testing.T) {
 	testCases := []formattingTestCase{
 		{Fields{}, "a message with empty fields", "a message with empty fields"},
-		{Fields{"key": "value"}, "message with one field", `message with one field key=value`},
-		{Fields{"key": "value", "key2": "value2"}, "message with more than one field", `message with more than one field key=value, key2=value2`},
-		{Fields{"keyz": "value", "keya": "value2"}, "message with non-alphabetic keys", `message with non-alphabetic keys keya=value2, keyz=value`},
+		{Fields{"key": "value"}, "message with one field", `message with one field | key=value`},
+		{Fields{"key": "value", "key2": "value2"}, "message with more than one field", `message with more than one field | key=value, key2=value2`},
+		{Fields{"keyz": "value", "keya": "value2"}, "message with non-alphabetic keys", `message with non-alphabetic keys | keya=value2, keyz=value`},
 	}
 
 	for _, testCase := range testCases {

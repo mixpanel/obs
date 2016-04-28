@@ -35,14 +35,17 @@ func formatMessage(buffer *bytes.Buffer, message string, fields Fields) {
 	}
 	sort.Strings(keys)
 
-	count, len := 0, len(keys)
-	buffer.WriteByte(' ')
+	count := 0
+	if len(keys) > 0 {
+		buffer.WriteString(" | ")
+	}
 	for _, k := range keys {
-		count++
 		buffer.WriteString(k)
 		buffer.WriteByte('=')
 		fmt.Fprintf(buffer, "%v", fields[k])
-		if count < len {
+
+		count++
+		if count < len(keys) {
 			buffer.WriteString(", ")
 		}
 	}
