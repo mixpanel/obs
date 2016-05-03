@@ -38,12 +38,7 @@ type logger struct {
 	syslogLevel   level
 	gologgerLevel level
 
-	minLevel   level
-	isDebug    bool
-	isInfo     bool
-	isWarn     bool
-	isError    bool
-	isCritical bool
+	minLevel level
 }
 
 func newLogger(syslogLevel level, filepath string, fileLevel level) *logger {
@@ -57,11 +52,6 @@ func newLogger(syslogLevel level, filepath string, fileLevel level) *logger {
 		minLevel:      minLevel,
 		syslogLevel:   syslogLevel,
 		gologgerLevel: fileLevel,
-		isDebug:       minLevel <= levelDebug,
-		isInfo:        minLevel <= levelInfo,
-		isWarn:        minLevel <= levelWarn,
-		isError:       minLevel <= levelError,
-		isCritical:    minLevel <= levelCritical,
 	}
 
 	if syslogLevel != levelNever {
@@ -98,11 +88,6 @@ func (l *logger) Named(name string) Logger {
 		syslogLevel:   l.syslogLevel,
 		gologgerLevel: l.gologgerLevel,
 		minLevel:      l.minLevel,
-		isDebug:       l.isDebug,
-		isInfo:        l.isInfo,
-		isWarn:        l.isWarn,
-		isError:       l.isError,
-		isCritical:    l.isCritical,
 	}
 }
 
@@ -127,56 +112,50 @@ func (l *logger) Critical(message string) {
 }
 
 func (l *logger) Debugf(message string, fields Fields) {
-	if l.IsDebug() {
-		l.logAtLevel(levelDebug, message, fields)
-	}
+	l.logAtLevel(levelDebug, message, fields)
 }
 
 func (l *logger) Infof(message string, fields Fields) {
-	if l.IsInfo() {
-		l.logAtLevel(levelInfo, message, fields)
-	}
+	l.logAtLevel(levelInfo, message, fields)
 }
 
 func (l *logger) Warnf(message string, fields Fields) {
-	if l.IsWarn() {
-		l.logAtLevel(levelWarn, message, fields)
-	}
+	l.logAtLevel(levelWarn, message, fields)
 }
 
 func (l *logger) Errorf(message string, fields Fields) {
-	if l.IsError() {
-		l.logAtLevel(levelError, message, fields)
-	}
+	l.logAtLevel(levelError, message, fields)
 }
 
 func (l *logger) Criticalf(message string, fields Fields) {
-	if l.IsCritical() {
-		l.logAtLevel(levelCritical, message, fields)
-	}
+	l.logAtLevel(levelCritical, message, fields)
 }
 
 func (l *logger) IsDebug() bool {
-	return l.isDebug
+	return l.minLevel <= levelDebug
 }
 
 func (l *logger) IsInfo() bool {
-	return l.isInfo
+	return l.minLevel <= levelInfo
 }
 
 func (l *logger) IsWarn() bool {
-	return l.isWarn
+	return l.minLevel <= levelWarn
 }
 
 func (l *logger) IsError() bool {
-	return l.isError
+	return l.minLevel <= levelError
 }
 
 func (l *logger) IsCritical() bool {
-	return l.isCritical
+	return l.minLevel <= levelCritical
 }
 
 func (l *logger) logAtLevel(lvl level, message string, fields Fields) {
+	if l.minLevel > lvl {
+		return
+	}
+
 	formattedMessage := textFormatter(lvl, l.name, message, fields)
 
 	if l.gologgerLevel <= lvl {
