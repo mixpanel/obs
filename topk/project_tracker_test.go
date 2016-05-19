@@ -43,7 +43,7 @@ func newProjectTracker() (*projectTracker, *mockClient) {
 		client:    mockMpClient,
 		receiver:  metrics.Null,
 		eventName: "test_event",
-		counts:    make(map[int32]int64),
+		counts:    make(map[int32]*sampledCount),
 	}, mockMpClient
 }
 
@@ -52,7 +52,7 @@ func testEvents(t *testing.T, projectIds []int32, tracker *projectTracker, clien
 
 	for i := 0; i < numEvents; i++ {
 		for _, p := range projectIds {
-			tracker.Track(int32(p))
+			tracker.Track(int32(p), i%2 == 0)
 		}
 	}
 
@@ -64,6 +64,8 @@ func testEvents(t *testing.T, projectIds []int32, tracker *projectTracker, clien
 	for _, e := range client.Events {
 		eventMap[e.Properties["project_id"].(int32)] = true
 		assert.Equal(t, int64(numEvents), e.Properties["count"])
+		assert.Equal(t, int64(numEvents), e.Properties["pre_sampling"])
+		assert.Equal(t, int64(numEvents)/2, e.Properties["post_sampling"])
 		assert.Equal(t, "test_event", e.EventName)
 	}
 
