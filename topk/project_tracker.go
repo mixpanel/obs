@@ -103,6 +103,7 @@ func (p *projectTracker) flush() {
 		events = append(events, &mixpanel.TrackedEvent{
 			EventName: p.eventName,
 			Properties: map[string]interface{}{
+				"distinct_id":   projectId,
 				"project_id":    projectId,
 				"count":         count.preSampling,
 				"pre_sampling":  count.preSampling,
