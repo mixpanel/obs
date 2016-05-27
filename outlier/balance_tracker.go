@@ -7,7 +7,6 @@ import (
 	"obs/logging"
 	"obs/metrics"
 	"sync"
-	"time"
 )
 
 type BalanceTracker interface {
@@ -27,7 +26,7 @@ type keyCount struct {
 }
 
 type balanceTracker struct {
-	interval              time.Duration
+	sampleEvery           int
 	decayFactor           float64
 	balanceRatio          float64
 	minTrackedPerInterval int64
@@ -125,17 +124,18 @@ func (t *balanceTracker) sample() {
 
 func (t *balanceTracker) start() {
 	go func() {
-		ticker := time.NewTicker(t.interval)
-		defer ticker.Stop()
+		count := 0
 		for {
-			select {
-			case <-ticker.C:
+			kv, ok := <-t.tracks
+			if !ok {
+				return
+			}
+			t.track(kv)
+
+			count++
+			if count >= t.sampleEvery {
+				count = 0
 				t.sample()
-			case kv, ok := <-t.tracks:
-				if !ok {
-					return
-				}
-				t.track(kv)
 			}
 		}
 	}()
@@ -161,7 +161,7 @@ func (t *balanceTracker) Close() {
 }
 
 func NewBalanceTracker(
-	interval time.Duration,
+	sampleEvery int,
 	minTrackedPerInterval int64,
 	numBuckets int,
 	balanceRatio float64,
@@ -169,7 +169,7 @@ func NewBalanceTracker(
 ) BalanceTracker {
 
 	tracker := &balanceTracker{
-		interval:              interval,
+		sampleEvery:           sampleEvery,
 		balanceRatio:          balanceRatio,
 		minTrackedPerInterval: minTrackedPerInterval,
 		numBuckets:            numBuckets,

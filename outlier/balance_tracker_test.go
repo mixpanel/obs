@@ -1,7 +1,6 @@
 package outlier
 
 import (
-	"hash/fnv"
 	"obs/metrics"
 	"strconv"
 	"testing"
@@ -10,19 +9,8 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func newBalanceTracker(minTrackedPerInterval int64, numBuckets int) *balanceTracker {
-	return &balanceTracker{
-		minTrackedPerInterval: minTrackedPerInterval,
-		numBuckets:            numBuckets,
-		interval:              60 * time.Second,
-		decayFactor:           2.0,
-		balanceRatio:          0.1,
-		hasher:                fnv.New32(),
-		tracks:                make(chan *KeyVal, 16),
-		counts:                make(map[int32]*keyCount),
-		imbalanced:            make(map[int32]struct{}),
-		receiver:              metrics.Null,
-	}
+func testBalanceTracker(minTrackedPerInterval int64, numBuckets int) *balanceTracker {
+	return NewBalanceTracker(1, minTrackedPerInterval, numBuckets, 0.1, metrics.Null).(*balanceTracker)
 }
 
 func generateDistinctIds(numDistinctIds int) []string {
@@ -37,7 +25,7 @@ func generateDistinctIds(numDistinctIds int) []string {
 
 func TestBalanceTracker(t *testing.T) {
 	dids := generateDistinctIds(5000)
-	tracker := newBalanceTracker(5000, 100)
+	tracker := testBalanceTracker(5000, 100)
 
 	for i := 0; i < 5000; i++ {
 		tracker.track(&KeyVal{1, dids[i]})
@@ -56,7 +44,7 @@ func TestBalanceTracker(t *testing.T) {
 
 func TestBalanceTrackerMinUpdates(t *testing.T) {
 	dids := generateDistinctIds(5000)
-	tracker := newBalanceTracker(5000, 100)
+	tracker := testBalanceTracker(5000, 100)
 
 	for i := 0; i < 2000; i++ {
 		tracker.track(&KeyVal{1, dids[0]})
@@ -68,7 +56,7 @@ func TestBalanceTrackerMinUpdates(t *testing.T) {
 
 func TestBalanceTrackerDecay(t *testing.T) {
 	dids := generateDistinctIds(5000)
-	tracker := newBalanceTracker(5000, 100)
+	tracker := testBalanceTracker(5000, 100)
 
 	for i := 0; i < 5000; i++ {
 		tracker.track(&KeyVal{1, dids[0]})
@@ -89,7 +77,7 @@ func TestBalanceTrackerDecay(t *testing.T) {
 
 func TestBalanceTrackerDecayWithoutUpdates(t *testing.T) {
 	dids := generateDistinctIds(1)
-	tracker := newBalanceTracker(5000, 100)
+	tracker := testBalanceTracker(5000, 100)
 
 	for i := 0; i < 5000; i++ {
 		tracker.track(&KeyVal{1, dids[0]})
@@ -106,21 +94,26 @@ func TestBalanceTrackerDecayWithoutUpdates(t *testing.T) {
 }
 
 func TestBalanceTrackerInterface(t *testing.T) {
-	dids := generateDistinctIds(10000)
-	tracker := NewBalanceTracker(1*time.Second, 5000, 100, 0.1, metrics.Null)
+	dids := generateDistinctIds(1000)
+	tracker := NewBalanceTracker(2000, 500, 100, 0.1, metrics.Null)
+	defer tracker.Close()
 
-	for i := 0; i < 10000; i++ {
+	for i, did := range dids {
 		if i%2 == 0 {
 			tracker.Track(1, dids[0])
 		} else {
-			tracker.Track(1, dids[i])
+			tracker.Track(1, did)
 		}
-		tracker.Track(2, dids[i])
+		tracker.Track(2, did)
 	}
 
-	time.Sleep(1500 * time.Millisecond)
-	assert.False(t, tracker.IsBalanced(1))
-	assert.True(t, tracker.IsBalanced(2))
+	timeoutAt := time.Now().Add(10 * time.Second)
+	for time.Now().Before(timeoutAt) {
+		if !tracker.IsBalanced(1) && tracker.IsBalanced(2) {
+			return
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	t.FailNow()
 
-	tracker.Close()
 }
