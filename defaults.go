@@ -18,7 +18,7 @@ type ObsOptions struct {
 	SyslogLevel     string `long:"syslog.level" default:"NEVER" description:"One of CRIT, ERR, WARN, INFO, DEBUG, NEVER"`
 	LogLevel        string `long:"log.level" default:"INFO" description:"One of CRIT, ERR, WARN, INFO, DEBUG, NEVER"`
 	LogPath         string `long:"log.path" description:"File path to log. uses stderr if not set"`
-	MetricsEndpoint string `long:"metrics-endpoint" description:"Address (host:port) to send metrics or 'inprocess' to record metrics within the process"`
+	MetricsEndpoint string `long:"metrics-endpoint" description:"Address (host:port) to send metrics"`
 }
 
 func NewOptions(parser *flags.Parser) *ObsOptions {

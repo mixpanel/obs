@@ -30,6 +30,7 @@ func TestSyslog(t *testing.T) {
 	logger := newLogger(levelDebug, "", levelNever)
 	buf := &bytes.Buffer{}
 	logger.syslog = buf
+	logger.syslogLevel = levelInfo
 
 	logger.Infof("test", Fields{"key": "value"})
 	if assert.Equal(t, "mixpanel ", buf.String()[:9]) {
