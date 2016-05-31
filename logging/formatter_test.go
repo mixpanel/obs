@@ -14,6 +14,7 @@ func TestLevelToString(t *testing.T) {
 	assert.Equal(t, "WARN", levelToString(levelWarn))
 	assert.Equal(t, "ERROR", levelToString(levelError))
 	assert.Equal(t, "CRITICAL", levelToString(levelCritical))
+	assert.Equal(t, "UNKNOWN", levelToString(level(123245)))
 }
 
 type formattingTestCase struct {
@@ -40,8 +41,16 @@ func TestTextFormattingLevel(t *testing.T) {
 	assert.True(t, strings.Contains(actual, "[INFO]"))
 }
 
+func TestFormatToEnum(t *testing.T) {
+	assert.Equal(t, formatJSON, formatToEnum("json"))
+	assert.Equal(t, formatText, formatToEnum("text"))
+	assert.Panics(t, func() {
+		formatToEnum("blah")
+	})
+}
+
 func fmtMessage(message string, fields Fields) string {
 	buf := &bytes.Buffer{}
-	formatMessage(buf, message, fields)
+	formatFields(buf, message, fields)
 	return buf.String()
 }

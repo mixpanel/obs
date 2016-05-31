@@ -36,17 +36,6 @@ func (fields Fields) WithError(err error) Fields {
 }
 
 func getLocalhostFields() Fields {
-	/*
-		TODO: these are present in python but not yet implemented here:
-			path to file (available from runtime.Caller)
-			function name (available from runtime.Stack)
-			line number (available from runtime.Caller)
-			error defaults to filepath:function
-			exception (passed in as an arg)
-				- type
-				- trace
-				- message
-	*/
 	fields := make(map[string]interface{})
 	fields["pid"] = os.Getpid()
 	fields["executable"] = os.Args[0]

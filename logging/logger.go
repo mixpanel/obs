@@ -1,7 +1,6 @@
 package logging
 
 import (
-	"encoding/json"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -37,11 +36,12 @@ type logger struct {
 	syslog        io.Writer
 	syslogLevel   level
 	gologgerLevel level
+	format        format
 
 	minLevel level
 }
 
-func newLogger(syslogLevel level, filepath string, fileLevel level) *logger {
+func newLogger(syslogLevel level, filepath string, fileLevel level, format format) *logger {
 	minLevel := syslogLevel
 	if fileLevel < minLevel {
 		minLevel = fileLevel
@@ -52,6 +52,7 @@ func newLogger(syslogLevel level, filepath string, fileLevel level) *logger {
 		minLevel:      minLevel,
 		syslogLevel:   syslogLevel,
 		gologgerLevel: fileLevel,
+		format:        format,
 	}
 
 	if syslogLevel != levelNever {
@@ -76,6 +77,10 @@ func newLogger(syslogLevel level, filepath string, fileLevel level) *logger {
 		}
 	} else {
 		golog.SetOutput(os.Stderr)
+	}
+
+	if format == formatJSON {
+		golog.SetFlags(0)
 	}
 
 	return log
@@ -156,23 +161,16 @@ func (l *logger) logAtLevel(lvl level, message string, fields Fields) {
 		return
 	}
 
-	formattedMessage := textFormatter(lvl, l.name, message, fields)
-
 	if l.gologgerLevel <= lvl {
-		golog.Println(formattedMessage)
-	}
-	if l.syslogLevel <= lvl {
-		fields.Update(localhostFields)
-		delete(fields, "hostname") // added by logstash
-		fields["logger"] = l.name
-		fields["level"] = levelToString(lvl)
-		fields["message"] = formattedMessage
-
-		payload, err := json.Marshal(fields)
-		if err != nil {
-			payload = []byte(`{"level": "ERROR", "message": "Failed to serialize to JSON."}`)
+		switch l.format {
+		case formatJSON:
+			golog.Println(jsonFormatter(lvl, l.name, message, fields))
+		case formatText:
+			golog.Println(textFormatter(lvl, l.name, message, fields))
 		}
+	}
 
-		io.WriteString(l.syslog, "mixpanel "+string(payload))
+	if l.syslogLevel <= lvl {
+		io.WriteString(l.syslog, "mixpanel "+jsonFormatter(lvl, l.name, message, fields))
 	}
 }

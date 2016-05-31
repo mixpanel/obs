@@ -2,12 +2,34 @@ package logging
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"os"
 	"sort"
 )
 
+type format int
+
+const (
+	formatJSON = format(iota)
+	formatText
+)
+
 var myPid = os.Getpid()
+
+func jsonFormatter(lvl level, name, message string, fields Fields) string {
+	fields.Update(localhostFields)
+	delete(fields, "hostname") // added automatically
+	fields["logger"] = name
+	fields["level"] = levelToString(lvl)
+	fields["message"] = message
+
+	formatted, err := json.Marshal(fields)
+	if err != nil {
+		return `{"level": "ERROR", "message": "Failed to serialize to JSON."}`
+	}
+	return string(formatted)
+}
 
 func textFormatter(lvl level, name, message string, fields Fields) string {
 	buffer := bytes.NewBuffer(make([]byte, 0, len(message)*2))
@@ -17,12 +39,12 @@ func textFormatter(lvl level, name, message string, fields Fields) string {
 	} else {
 		fmt.Fprintf(buffer, "pid=%d [%s] %s: ", myPid, levelToString(lvl), name)
 	}
-	formatMessage(buffer, message, fields)
+	formatFields(buffer, message, fields)
 
 	return buffer.String()
 }
 
-func formatMessage(buffer *bytes.Buffer, message string, fields Fields) {
+func formatFields(buffer *bytes.Buffer, message string, fields Fields) {
 	buffer.WriteString(message)
 
 	if len(fields) == 0 {
@@ -65,5 +87,16 @@ func levelToString(lvl level) string {
 		return "CRITICAL"
 	default:
 		return "UNKNOWN"
+	}
+}
+
+func formatToEnum(s string) format {
+	switch s {
+	case "json":
+		return formatJSON
+	case "text":
+		return formatText
+	default:
+		panic(fmt.Errorf("error unknown log format type: %s", s))
 	}
 }

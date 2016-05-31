@@ -18,6 +18,7 @@ type ObsOptions struct {
 	SyslogLevel     string `long:"syslog.level" default:"NEVER" description:"One of CRIT, ERR, WARN, INFO, DEBUG, NEVER"`
 	LogLevel        string `long:"log.level" default:"INFO" description:"One of CRIT, ERR, WARN, INFO, DEBUG, NEVER"`
 	LogPath         string `long:"log.path" description:"File path to log. uses stderr if not set"`
+	LogFormat       string `long:"log.format" description:"Format of log output" default:"text" choice:"text" choice:"json"`
 	MetricsEndpoint string `long:"metrics-endpoint" description:"Address (host:port) to send metrics"`
 }
 
@@ -41,7 +42,7 @@ func (opts *ObsOptions) Init(metricsPrefix string) {
 }
 
 func (opts *ObsOptions) InitLogging() {
-	Log = logging.New(opts.SyslogLevel, opts.LogLevel, opts.LogPath)
+	Log = logging.New(opts.SyslogLevel, opts.LogLevel, opts.LogPath, opts.LogFormat)
 }
 
 // InitLogging should already have been invoked
