@@ -15,6 +15,12 @@ type BalanceTracker interface {
 	Close()
 }
 
+type NullBalanceTracker struct{}
+
+func (t *NullBalanceTracker) Track(key int32, value string) {}
+func (t *NullBalanceTracker) Close()                        {}
+func (t *NullBalanceTracker) IsBalanced(key int32) bool     { return true }
+
 type KeyVal struct {
 	key   int32
 	value string
@@ -23,6 +29,9 @@ type KeyVal struct {
 type keyCount struct {
 	count   int64
 	buckets []uint64
+
+	shouldLog      bool
+	distinctValues map[string]int64
 }
 
 type balanceTracker struct {
@@ -48,12 +57,17 @@ func (t *balanceTracker) hash(value string) uint32 {
 }
 
 func (t *balanceTracker) track(kv *KeyVal) {
+	if len(kv.value) == 0 {
+		return
+	}
 	var v *keyCount
 	var ok bool
 	if v, ok = t.counts[kv.key]; !ok {
 		v = &keyCount{
-			count:   0,
-			buckets: make([]uint64, t.numBuckets),
+			count:          0,
+			buckets:        make([]uint64, t.numBuckets),
+			shouldLog:      false,
+			distinctValues: make(map[string]int64),
 		}
 		t.counts[kv.key] = v
 	}
@@ -61,6 +75,10 @@ func (t *balanceTracker) track(kv *KeyVal) {
 	v.count++
 
 	v.buckets[int(t.hash(kv.value))%len(v.buckets)]++
+
+	if v.shouldLog {
+		v.distinctValues[kv.value]++
+	}
 }
 
 func (t *balanceTracker) isArrayBalanced(values []uint64) bool {
@@ -86,14 +104,37 @@ func (t *balanceTracker) sample() {
 
 	numImbalanced := 0
 	for k, v := range t.counts {
+
+		if v.shouldLog {
+			m := make(map[string]int64)
+			for d, c := range v.distinctValues {
+				if c > int64(float64(v.count)*0.05) {
+					m[d] = c
+				}
+			}
+			// Note that these values are captured one cycle after the associated key is marked as unbalanced
+			// As a result, the numbers here might not be the same as those that caused the key to become
+			// unbalanced in the first place.
+			obs.Log.Warnf("distinct values with count larger than 5 percent of the total", logging.Fields{
+				"key":             k,
+				"count":           v.count,
+				"distinct_values": m,
+			})
+		}
+
+		v.shouldLog = false
+		v.distinctValues = make(map[string]int64)
+
 		if v.count >= t.minTrackedPerInterval {
 			if !t.isArrayBalanced(v.buckets) {
+				v.shouldLog = true
 				imbalanced[k] = struct{}{}
 				numImbalanced++
 
 				obs.Log.Warnf("imbalanced tracks for key", logging.Fields{
 					"key":        k,
 					"num_tracks": v.count,
+					"buckets":    v.buckets,
 				})
 			}
 		}
