@@ -14,10 +14,20 @@ import (
 
 type wavefrontSink struct {
 	origin    string
+	tags      map[string]string
 	hostPorts []string
 	mutex     sync.Mutex // protects buffer and closed
 	buffer    *bytes.Buffer
 	closed    bool
+}
+
+func writeTags(buf *bytes.Buffer, tags Tags) {
+	for k, v := range tags {
+		buf.WriteString(k)
+		buf.WriteString("=")
+		buf.WriteString(v)
+		buf.WriteString(" ")
+	}
 }
 
 func (sink *wavefrontSink) Handle(metric string, tags Tags, value float64, metricType metricType) error {
@@ -37,12 +47,10 @@ func (sink *wavefrontSink) Handle(metric string, tags Tags, value float64, metri
 	_, _ = buf.WriteString("host=")
 	_, _ = buf.WriteString(sink.origin)
 	_, _ = buf.WriteString(" ")
-	for k, v := range tags {
-		buf.WriteString(k)
-		buf.WriteString("=")
-		buf.WriteString(v)
-		buf.WriteString(" ")
-	}
+
+	writeTags(buf, tags)
+	writeTags(buf, sink.tags)
+
 	buf.WriteString("\n")
 
 	sink.mutex.Lock()
@@ -105,9 +113,10 @@ func (sink *wavefrontSink) Close() {
 	sink.Flush()
 }
 
-func NewWavefrontSink(origin string, hostPorts []string) Sink {
+func NewWavefrontSink(origin string, tags map[string]string, hostPorts []string) Sink {
 	return &wavefrontSink{
 		origin:    origin,
+		tags:      tags,
 		hostPorts: hostPorts,
 		buffer:    &bytes.Buffer{},
 	}

@@ -42,6 +42,7 @@ func TestWavefrontSinkWithTags(t *testing.T) {
 	go newServer(endpoint)
 
 	sink := newSink(endpoint.address)
+	sink.(*wavefrontSink).tags = map[string]string{"X": "Y"}
 
 	tags := Tags{
 		"a": "b",
@@ -55,7 +56,7 @@ func TestWavefrontSinkWithTags(t *testing.T) {
 
 	split := strings.Split(strings.TrimSpace(string(endpoint.buf.Bytes())), " ")
 
-	assert.Equal(t, len(split), 6)
+	assert.Equal(t, len(split), 7)
 	assert.Equal(t, "test.metric", split[0])
 	assert.Equal(t, "10.000000", split[1])
 	assert.Equal(t, "host=localhost", split[3])
@@ -63,11 +64,14 @@ func TestWavefrontSinkWithTags(t *testing.T) {
 	mp := map[string]bool{
 		"a=b": true,
 		"c=d": true,
+		"X=Y": true,
 	}
 
 	assert.False(t, split[4] == split[5])
+	assert.False(t, split[4] == split[6])
 	assert.True(t, mp[split[4]])
 	assert.True(t, mp[split[5]])
+	assert.True(t, mp[split[6]])
 }
 
 func TestWavefrontSinkRetrySuccess(t *testing.T) {
@@ -78,7 +82,7 @@ func TestWavefrontSinkRetrySuccess(t *testing.T) {
 		addresses[i] = fmt.Sprintf("127.0.0.1:%d", i+1)
 	}
 	addresses = append(addresses, endpoint.address)
-	sink := NewWavefrontSink("localhost", addresses)
+	sink := NewWavefrontSink("localhost", nil, addresses)
 	testWavefrontSinkWithoutTags(sink, endpoint, t)
 }
 
@@ -88,7 +92,7 @@ func TestWavefrontSinkRetryError(t *testing.T) {
 	for i := 0; i < 10; i++ {
 		addresses[i] = fmt.Sprintf("127.0.0.1:%d", i+1)
 	}
-	sink := NewWavefrontSink("localhost", addresses)
+	sink := NewWavefrontSink("localhost", nil, addresses)
 	sink.Handle("test.metric", nil, 10, "ct")
 	assert.NotNil(t, sink.Flush())
 }
@@ -109,7 +113,7 @@ func newServer(endpoint *tcpEndpoint) {
 }
 
 func newSink(address string) Sink {
-	return NewWavefrontSink("localhost", []string{address})
+	return NewWavefrontSink("localhost", nil, []string{address})
 }
 
 func newTcpEndpoint() *tcpEndpoint {
