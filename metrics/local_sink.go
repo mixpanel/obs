@@ -22,7 +22,9 @@ type localSink struct {
 	stats    _metrics.Registry
 	dst      Sink
 
-	flushLock      sync.Mutex
+	registerLock *sync.Mutex
+
+	flushLock      *sync.Mutex
 	flushThreshold int
 	flushedValues  map[string]*value
 }
@@ -34,13 +36,19 @@ func (sink *localSink) Handle(metric string, tags Tags, value float64, metricTyp
 
 	formatted := metric + "|" + FormatTags(tags)
 
+	sink.registerLock.Lock()
+	defer sink.registerLock.Unlock()
 	switch metricType {
 	case metricTypeCounter:
 		counter := _metrics.GetOrRegisterCounter(formatted, sink.counters)
 		counter.Inc(int64(value))
 	case metricTypeGauge:
-		gauge := _metrics.GetOrRegisterGaugeFloat64(formatted, sink.gauges)
-		gauge.Update(value)
+		gauge := sink.gauges.Get(formatted)
+		if gauge == nil {
+			gauge = _metrics.NewGaugeFloat64()
+			defer sink.gauges.Register(formatted, gauge)
+		}
+		gauge.(_metrics.GaugeFloat64).Update(value)
 	case metricTypeStat:
 		stat := sink.stats.Get(formatted)
 		if stat == nil {
@@ -130,11 +138,13 @@ func (sink *localSink) Close() {
 
 func NewLocalSink(dst Sink, flushThreshold int) Sink {
 	return &localSink{
-		counters: _metrics.NewRegistry(),
-		gauges:   _metrics.NewRegistry(),
-		stats:    _metrics.NewRegistry(),
-		dst:      dst,
+		counters:     _metrics.NewRegistry(),
+		gauges:       _metrics.NewRegistry(),
+		stats:        _metrics.NewRegistry(),
+		dst:          dst,
+		registerLock: &sync.Mutex{},
 
+		flushLock:      &sync.Mutex{},
 		flushThreshold: flushThreshold,
 		flushedValues:  make(map[string]*value),
 	}
