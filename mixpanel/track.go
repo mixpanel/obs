@@ -122,6 +122,10 @@ func (c *client) Import(events []*TrackedEvent) error {
 }
 
 func (c *client) UrlWithTracking(event *TrackedEvent, dest string) (*url.URL, error) {
+	if event.Time.IsZero() {
+		event.Time = time.Now()
+	}
+
 	data, err := c.encodeEvent([]*TrackedEvent{event})
 	if err != nil {
 		return nil, err
