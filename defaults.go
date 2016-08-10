@@ -74,3 +74,12 @@ func ReportUptime(receiver metrics.Receiver) {
 		}
 	}()
 }
+
+func RecordError(receiver metrics.Receiver, err error) {
+	if err != nil {
+		receiver.Incr("failure")
+		Log.Debugf("recording error", logging.Fields{}.WithError(err))
+	} else {
+		receiver.Incr("success")
+	}
+}
