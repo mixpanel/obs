@@ -8,20 +8,24 @@ import (
 	"time"
 )
 
+const (
+	CountTag        = "count"
+	PreSamplingTag  = "pre_sampling"
+	PostSamplingTag = "post_sampling"
+	CETag           = "ce_event"
+)
+
 type ProjectTracker interface {
-	Track(projectId int32, inSample bool)
+	Track(projectId int32, tags ...string)
 	Close()
 }
 
 type NullProjectTracker struct{}
 
-func (p *NullProjectTracker) Track(projectId int32, inSample bool) {}
-func (p *NullProjectTracker) Close()                               {}
+func (p *NullProjectTracker) Track(projectId int32, tags ...string) {}
+func (p *NullProjectTracker) Close()                                {}
 
-type sampledCount struct {
-	preSampling  int64
-	postSampling int64
-}
+type projectCounts map[string]int64
 
 type projectTracker struct {
 	ticker    *time.Ticker
@@ -30,7 +34,7 @@ type projectTracker struct {
 	receiver  metrics.Receiver
 
 	mutex  sync.Mutex // guards everything below
-	counts map[int32]*sampledCount
+	counts map[int32]projectCounts
 }
 
 func NewProjectTracker(client mixpanel.Client,
@@ -42,7 +46,7 @@ func NewProjectTracker(client mixpanel.Client,
 		client:    client,
 		eventName: eventName,
 		receiver:  receiver,
-		counts:    make(map[int32]*sampledCount),
+		counts:    make(map[int32]projectCounts),
 	}
 
 	go func() {
@@ -60,18 +64,18 @@ func NewProjectTracker(client mixpanel.Client,
 	return p
 }
 
-func (p *projectTracker) Track(projectId int32, inSample bool) {
+func (p *projectTracker) Track(projectId int32, tags ...string) {
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
 
 	if _, ok := p.counts[projectId]; !ok {
-		p.counts[projectId] = &sampledCount{}
+		p.counts[projectId] = make(map[string]int64)
 	}
 
 	count := p.counts[projectId]
-	count.preSampling++
-	if inSample {
-		count.postSampling++
+	count[CountTag]++
+	for _, tag := range tags {
+		count[tag]++
 	}
 }
 
@@ -89,7 +93,7 @@ func (p *projectTracker) send(events []*mixpanel.TrackedEvent) {
 func (p *projectTracker) flush() {
 	p.mutex.Lock()
 	counts := p.counts
-	p.counts = make(map[int32]*sampledCount, len(counts))
+	p.counts = make(map[int32]projectCounts, len(counts))
 	p.mutex.Unlock()
 
 	if len(counts) == 0 {
@@ -100,15 +104,18 @@ func (p *projectTracker) flush() {
 
 	maxBatchSize := 100
 	for projectId, count := range counts {
+		props := map[string]interface{}{
+			"distinct_id": projectId,
+			"project_id":  projectId,
+		}
+
+		for k, v := range count {
+			props[k] = v
+		}
+
 		events = append(events, &mixpanel.TrackedEvent{
-			EventName: p.eventName,
-			Properties: map[string]interface{}{
-				"distinct_id":   projectId,
-				"project_id":    projectId,
-				"count":         count.preSampling,
-				"pre_sampling":  count.preSampling,
-				"post_sampling": count.postSampling,
-			},
+			EventName:  p.eventName,
+			Properties: props,
 		})
 		if len(events) == maxBatchSize {
 			p.send(events)
