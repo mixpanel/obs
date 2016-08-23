@@ -46,6 +46,7 @@ func (sink *localSink) Handle(metric string, tags Tags, value float64, metricTyp
 		gauge := sink.gauges.Get(formatted)
 		if gauge == nil {
 			gauge = _metrics.NewGaugeFloat64()
+			// N.B. defer so that we only register after we've set the value.
 			defer sink.gauges.Register(formatted, gauge)
 		}
 		gauge.(_metrics.GaugeFloat64).Update(value)
@@ -53,7 +54,9 @@ func (sink *localSink) Handle(metric string, tags Tags, value float64, metricTyp
 		stat := sink.stats.Get(formatted)
 		if stat == nil {
 			sample := _metrics.NewTimeWindowSample(4096, 8192, 300*time.Second)
-			stat = _metrics.GetOrRegisterHistogram(formatted, sink.stats, sample)
+			stat = _metrics.NewHistogram(sample)
+			// N.B. defer so that we only register after we've set the value.
+			defer sink.stats.Register(formatted, stat)
 		}
 		stat.(_metrics.Histogram).Update(int64(value))
 	default:
