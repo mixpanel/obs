@@ -5,7 +5,7 @@ var initErrors []string
 func New(syslogLevel, fileLevel, filePath, format string) Logger {
 	logger := buildLogger(syslogLevel, fileLevel, filePath, format)
 	for _, message := range initErrors {
-		logger.Error(message)
+		logger.Error(message, nil)
 	}
 	initErrors = nil
 	return logger

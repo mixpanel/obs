@@ -12,14 +12,14 @@ import (
 
 func TestLoggerWrites(t *testing.T) {
 	logger, buf := testLogger(formatText)
-	logger.Infof("test", Fields{"key": "value"})
+	logger.Info("test", Fields{"key": "value"})
 	assert.Contains(t, buf.String(), `key=value`)
 }
 
 func TestLoggerNamed(t *testing.T) {
 	logger, buf := testLogger(formatText)
 	logger = logger.Named("new name")
-	logger.Info("test")
+	logger.Info("test", nil)
 	assert.Contains(t, buf.String(), "new name")
 }
 
@@ -29,7 +29,7 @@ func TestSyslog(t *testing.T) {
 	logger.syslog = buf
 	logger.syslogLevel = levelInfo
 
-	logger.Infof("test", Fields{"key": "value"})
+	logger.Info("test", Fields{"key": "value"})
 	if assert.Equal(t, "mixpanel ", buf.String()[:9]) {
 		parsed := map[string]interface{}{}
 		err := json.Unmarshal(buf.Bytes()[9:], &parsed)
@@ -46,7 +46,7 @@ func TestSyslog(t *testing.T) {
 
 func TestLoggerJSON(t *testing.T) {
 	logger, buf := testLogger(formatJSON)
-	logger.Infof("test", Fields{"key": "value"})
+	logger.Info("test", Fields{"key": "value"})
 	var res map[string]interface{}
 	err := json.Unmarshal(buf.Bytes(), &res)
 	assert.NoError(t, err)

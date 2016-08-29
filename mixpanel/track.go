@@ -82,7 +82,7 @@ func (c *client) track(es []*TrackedEvent) error {
 		if err != nil {
 			return err
 		}
-		return fmt.Errorf("track returned status %d: %q", resp.Status, string(body))
+		return fmt.Errorf("track returned status %s: %q", resp.Status, string(body))
 	}
 	_, _ = io.Copy(ioutil.Discard, resp.Body)
 	resp.Body.Close()
@@ -114,7 +114,7 @@ func (c *client) Import(events []*TrackedEvent) error {
 		if err != nil {
 			return err
 		}
-		return fmt.Errorf("track returned status %d: %q", resp.Status, string(body))
+		return fmt.Errorf("track returned status %s: %q", resp.Status, string(body))
 	}
 	_, _ = io.Copy(ioutil.Discard, resp.Body)
 	resp.Body.Close()

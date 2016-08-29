@@ -4,34 +4,19 @@ var Null Logger = nullLogger(struct{}{})
 
 type nullLogger struct{}
 
-func (nl nullLogger) Debugf(message string, fields Fields) {
+func (nl nullLogger) Debug(message string, fields Fields) {
 }
 
-func (nl nullLogger) Infof(message string, fields Fields) {
+func (nl nullLogger) Info(message string, fields Fields) {
 }
 
-func (nl nullLogger) Warnf(message string, fields Fields) {
+func (nl nullLogger) Warn(message string, fields Fields) {
 }
 
-func (nl nullLogger) Errorf(message string, fields Fields) {
+func (nl nullLogger) Error(message string, fields Fields) {
 }
 
-func (nl nullLogger) Criticalf(message string, fields Fields) {
-}
-
-func (nl nullLogger) Debug(message string) {
-}
-
-func (nl nullLogger) Info(message string) {
-}
-
-func (nl nullLogger) Warn(message string) {
-}
-
-func (nl nullLogger) Error(message string) {
-}
-
-func (nl nullLogger) Critical(message string) {
+func (nl nullLogger) Critical(message string, fields Fields) {
 }
 
 func (nl nullLogger) IsDebug() bool {

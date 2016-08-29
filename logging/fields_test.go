@@ -6,13 +6,21 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestUpdateFields(t *testing.T) {
+func TestMergeFields(t *testing.T) {
 	lhs := Fields{"key": "value"}
 	rhs := Fields{"key2": "value2"}
 
-	merged := lhs.Update(rhs)
-	assert.Equal(t, "value", merged["key"])
-	assert.Equal(t, "value2", merged["key2"])
+	lhs = MergeFields(lhs, rhs)
+	assert.Equal(t, "value", lhs["key"])
+	assert.Equal(t, "value2", lhs["key2"])
+}
+
+func TestMergeEmptyFields(t *testing.T) {
+	var lhs Fields
+	rhs := Fields{"key": "value"}
+
+	lhs = MergeFields(lhs, rhs)
+	assert.Equal(t, "value", lhs["key"])
 }
 
 func TestDupeFields(t *testing.T) {

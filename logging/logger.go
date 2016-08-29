@@ -10,17 +10,11 @@ import (
 )
 
 type Logger interface {
-	Debugf(message string, fields Fields)
-	Infof(message string, fields Fields)
-	Warnf(message string, fields Fields)
-	Errorf(message string, fields Fields)
-	Criticalf(message string, fields Fields)
-
-	Debug(message string)
-	Info(message string)
-	Warn(message string)
-	Error(message string)
-	Critical(message string)
+	Debug(message string, fields Fields)
+	Info(message string, fields Fields)
+	Warn(message string, fields Fields)
+	Error(message string, fields Fields)
+	Critical(message string, fields Fields)
 
 	IsDebug() bool
 	IsInfo() bool
@@ -96,43 +90,23 @@ func (l *logger) Named(name string) Logger {
 	}
 }
 
-func (l *logger) Debug(message string) {
-	l.Debugf(message, Fields{})
-}
-
-func (l *logger) Info(message string) {
-	l.Infof(message, Fields{})
-}
-
-func (l *logger) Warn(message string) {
-	l.Warnf(message, Fields{})
-}
-
-func (l *logger) Error(message string) {
-	l.Errorf(message, Fields{})
-}
-
-func (l *logger) Critical(message string) {
-	l.Criticalf(message, Fields{})
-}
-
-func (l *logger) Debugf(message string, fields Fields) {
+func (l *logger) Debug(message string, fields Fields) {
 	l.logAtLevel(levelDebug, message, fields)
 }
 
-func (l *logger) Infof(message string, fields Fields) {
+func (l *logger) Info(message string, fields Fields) {
 	l.logAtLevel(levelInfo, message, fields)
 }
 
-func (l *logger) Warnf(message string, fields Fields) {
+func (l *logger) Warn(message string, fields Fields) {
 	l.logAtLevel(levelWarn, message, fields)
 }
 
-func (l *logger) Errorf(message string, fields Fields) {
+func (l *logger) Error(message string, fields Fields) {
 	l.logAtLevel(levelError, message, fields)
 }
 
-func (l *logger) Criticalf(message string, fields Fields) {
+func (l *logger) Critical(message string, fields Fields) {
 	l.logAtLevel(levelCritical, message, fields)
 }
 

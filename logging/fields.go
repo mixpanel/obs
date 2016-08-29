@@ -14,15 +14,20 @@ func init() {
 	localhostFields = getLocalhostFields()
 }
 
-func (fields Fields) Update(updates Fields) Fields {
-	for k, v := range updates {
-		fields[k] = v
+// MergeFields creates a new Fields set by merging a and b.
+func MergeFields(a, b Fields) Fields {
+	merged := make(Fields, len(a)+len(b))
+	for k, v := range a {
+		merged[k] = v
 	}
-	return fields
+	for k, v := range b {
+		merged[k] = v
+	}
+	return merged
 }
 
 func (fields Fields) Dupe() Fields {
-	dupe := make(map[string]interface{}, len(fields))
+	dupe := make(Fields, len(fields))
 	for k, v := range fields {
 		dupe[k] = v
 	}
@@ -36,7 +41,7 @@ func (fields Fields) WithError(err error) Fields {
 }
 
 func getLocalhostFields() Fields {
-	fields := make(map[string]interface{})
+	fields := make(Fields)
 	fields["pid"] = os.Getpid()
 	fields["executable"] = os.Args[0]
 	fields["argv"] = os.Args

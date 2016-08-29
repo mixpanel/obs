@@ -115,7 +115,7 @@ func (t *balanceTracker) sample() {
 			// Note that these values are captured one cycle after the associated key is marked as unbalanced
 			// As a result, the numbers here might not be the same as those that caused the key to become
 			// unbalanced in the first place.
-			obs.Log.Warnf("distinct values with count larger than 5 percent of the total", logging.Fields{
+			obs.Log.Warn("distinct values with count larger than 5 percent of the total", logging.Fields{
 				"key":             k,
 				"count":           v.count,
 				"distinct_values": m,
@@ -131,7 +131,7 @@ func (t *balanceTracker) sample() {
 				imbalanced[k] = struct{}{}
 				numImbalanced++
 
-				obs.Log.Warnf("imbalanced tracks for key", logging.Fields{
+				obs.Log.Warn("imbalanced tracks for key", logging.Fields{
 					"key":        k,
 					"num_tracks": v.count,
 					"buckets":    v.buckets,

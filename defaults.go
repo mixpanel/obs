@@ -35,7 +35,7 @@ func NewOptions(parser *flags.Parser) *ObsOptions {
 func (opts *ObsOptions) Init(metricsPrefix string) {
 	opts.InitLogging()
 	if sink, err := metrics.NewStatsdSink(opts.MetricsEndpoint); err != nil {
-		panic(fmt.Errorf("error initializing metrics: {{error_message}}", logging.Fields{}.WithError(err)))
+		panic(fmt.Errorf("error initializing metrics: %v", err))
 	} else {
 		opts.InitWithSink(metricsPrefix, sink)
 	}
@@ -78,7 +78,7 @@ func ReportUptime(receiver metrics.Receiver) {
 func RecordError(receiver metrics.Receiver, err error) {
 	if err != nil {
 		receiver.Incr("failure")
-		Log.Debugf("recording error", logging.Fields{}.WithError(err))
+		Log.Debug("recording error", logging.Fields{}.WithError(err))
 	} else {
 		receiver.Incr("success")
 	}
