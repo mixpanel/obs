@@ -21,7 +21,7 @@ func jsonFormatter(lvl level, name, message string, fields Fields) string {
 	fields = MergeFields(fields, localhostFields)
 	delete(fields, "hostname") // added automatically
 	fields["logger"] = name
-	fields["level"] = levelToString(lvl) // TOOD: remove once we're entirely on GCP
+	fields["level"] = levelToString(lvl) // TODO: remove once we're entirely on GCP
 	fields["severity"] = levelToString(lvl)
 	fields["message"] = message
 
