@@ -28,8 +28,8 @@ var NullSink Sink = &nullSink{}
 
 type MockSink struct {
 	mutex       sync.Mutex
+	numFlushes  int
 	Invocations map[string]int
-	NumFlushes  int
 }
 
 func (sink *MockSink) Handle(metric string, tags Tags, value float64, metricType metricType) error {
@@ -45,7 +45,27 @@ func (sink *MockSink) Flush() error {
 	sink.mutex.Lock()
 	defer sink.mutex.Unlock()
 
-	sink.NumFlushes--
+	sink.numFlushes--
 	return nil
 }
+
 func (sink *MockSink) Close() {}
+
+func (sink *MockSink) NumFlushes() int {
+	sink.mutex.Lock()
+	defer sink.mutex.Unlock()
+	return sink.numFlushes
+}
+
+func (sink *MockSink) NumInvocations() int {
+	sink.mutex.Lock()
+	defer sink.mutex.Unlock()
+	return len(sink.Invocations)
+}
+
+func NewMockSink() *MockSink {
+	return &MockSink{
+		numFlushes:  1,
+		Invocations: make(map[string]int),
+	}
+}

@@ -70,8 +70,14 @@ func (sink *statsdSink) Flush() error {
 }
 
 func (sink *statsdSink) flusher() {
+	defer func() {
+		if err := sink.conn.Close(); err != nil {
+			log.Printf("error while closing connection to statsd: %v", err)
+		}
+		sink.wg.Done()
+	}()
+
 	nextFlush := time.After(sink.flushInterval)
-	defer sink.wg.Done()
 
 	buffer := &bytes.Buffer{}
 	flushBuffer := func() error {
@@ -92,7 +98,7 @@ func (sink *statsdSink) flusher() {
 		select {
 		case stat := <-sink.metrics:
 			writeStatToBuffer(stat, buffer)
-			if buffer.Len() > batchSizeBytes {
+			if buffer.Len() >= batchSizeBytes {
 				flushBuffer()
 			}
 		case _, ok := <-sink.flushes:
@@ -127,15 +133,7 @@ func (sink *statsdSink) Close() {
 	sink.wg.Wait()
 }
 
-func NewStatsdSink(addr string) (Sink, error) {
-	if addr == "" {
-		return &nullSink{}, nil
-	}
-	conn, err := net.Dial("udp", addr)
-	if err != nil {
-		return nil, err
-	}
-
+func newStatsdSinkFromConn(conn net.Conn) (Sink, error) {
 	wg := &sync.WaitGroup{}
 	sink := &statsdSink{
 		metrics:       make(chan *bytes.Buffer, 128),
@@ -149,4 +147,16 @@ func NewStatsdSink(addr string) (Sink, error) {
 	go sink.flusher()
 
 	return sink, nil
+}
+
+func NewStatsdSink(addr string) (Sink, error) {
+	if addr == "" {
+		return &nullSink{}, nil
+	}
+	conn, err := net.Dial("udp", addr)
+	if err != nil {
+		return nil, err
+	}
+
+	return newStatsdSinkFromConn(conn)
 }

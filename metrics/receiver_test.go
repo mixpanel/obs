@@ -136,39 +136,24 @@ func TestStopwatch(t *testing.T) {
 	assert.True(t, re.MatchString(emitted))
 }
 
-type udpEndpoint struct {
-	address string
-	conn    *net.UDPConn
+type testEndpoint struct {
+	conn net.Conn
 }
 
-func newUDPEndpoint() *udpEndpoint {
-	addr, err := net.ResolveUDPAddr("udp", "127.0.0.1:0")
+func (endpoint *testEndpoint) readAll() string {
+	buf := make([]byte, 64000)
+	n, err := endpoint.conn.Read(buf)
 	util.CheckFatalError(err)
-	conn, err := net.ListenUDP("udp", addr)
-	util.CheckFatalError(err)
-
-	return &udpEndpoint{conn.LocalAddr().String(), conn}
+	return strings.TrimSpace(string(buf[0:n]))
 }
 
-func (endpoint *udpEndpoint) readAll() string {
-	result := make([]byte, 0, 128)
-	buf := make([]byte, 128)
-	for {
-		endpoint.conn.SetReadDeadline(time.Now().Add(50 * time.Millisecond))
-		n, err := endpoint.conn.Read(buf)
-		result = append(result, buf[0:n]...)
-		if timeout, ok := err.(net.Error); ok && timeout.Timeout() {
-			return strings.TrimSpace(string(result))
-		}
-		util.CheckFatalError(err)
-	}
-}
+func newTestMetrics(t *testing.T) (Receiver, *testEndpoint) {
+	c1, c2 := net.Pipe()
 
-func newTestMetrics(t *testing.T) (Receiver, *udpEndpoint) {
-	endpoint := newUDPEndpoint()
-	sink, err := NewStatsdSink(endpoint.address)
-	assert.Nil(t, err)
-	return NewReceiver(sink), endpoint
+	sink, err := newStatsdSinkFromConn(c1)
+	assert.NoError(t, err)
+
+	return NewReceiver(sink), &testEndpoint{c2}
 }
 
 func parseStatsdTags(line string) Tags {

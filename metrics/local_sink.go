@@ -40,8 +40,12 @@ func (sink *localSink) Handle(metric string, tags Tags, value float64, metricTyp
 	defer sink.registerLock.Unlock()
 	switch metricType {
 	case metricTypeCounter:
-		counter := _metrics.GetOrRegisterCounter(formatted, sink.counters)
-		counter.Inc(int64(value))
+		counter := sink.counters.Get(formatted)
+		if counter == nil {
+			counter = _metrics.NewCounter()
+			defer sink.counters.Register(formatted, counter)
+		}
+		counter.(_metrics.Counter).Inc(int64(value))
 	case metricTypeGauge:
 		gauge := sink.gauges.Get(formatted)
 		if gauge == nil {
