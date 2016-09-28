@@ -1,37 +1,26 @@
 package obs
 
 import (
-	"io"
 	"obs/metrics"
 	"runtime"
 	"time"
 )
 
-type closerChan chan struct{}
-
-func (c closerChan) Close() error {
-	close(c)
-	return nil
-}
-
-func ReportGCMetrics(interval time.Duration, r metrics.Receiver) io.Closer {
+func reportGCMetrics(interval time.Duration, done <-chan struct{}, r metrics.Receiver) {
 	r = r.ScopePrefix("gc")
 	numGCs := uint32(0)
 
 	memstats := &runtime.MemStats{}
-	closed := make(chan struct{})
 	go func() {
 		for {
 			select {
-			case _ = <-closed:
+			case <-done:
 				return
 			case _ = <-time.After(interval):
 				numGCs = reportGCsSince(memstats, numGCs, r)
 			}
 		}
 	}()
-
-	return closerChan(closed)
 }
 
 func reportGCsSince(memstats *runtime.MemStats, lastCount uint32, r metrics.Receiver) uint32 {

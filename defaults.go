@@ -4,82 +4,94 @@ import (
 	"fmt"
 	"obs/logging"
 	"obs/metrics"
+	"path"
 	"time"
 	"version"
 
-	"github.com/jessevdk/go-flags"
+	"golang.org/x/net/context"
+
+	opentracing "github.com/opentracing/opentracing-go"
 )
 
-var Log logging.Logger = logging.Null
-var Sink metrics.Sink = metrics.NullSink
-var Metrics metrics.Receiver = metrics.Null
+type Closer func()
 
-type ObsOptions struct {
-	SyslogLevel     string `long:"syslog.level" default:"NEVER" description:"One of CRIT, ERR, WARN, INFO, DEBUG, NEVER"`
-	LogLevel        string `long:"log.level" default:"INFO" description:"One of CRIT, ERR, WARN, INFO, DEBUG, NEVER"`
-	LogPath         string `long:"log.path" description:"File path to log. uses stderr if not set"`
-	LogFormat       string `long:"log.format" description:"Format of log output" default:"text" choice:"text" choice:"json"`
-	MetricsEndpoint string `long:"metrics-endpoint" description:"Address (host:port) to send metrics"`
+func InitGCP(ctx context.Context, serviceName string) (FlightRecorder, Closer) {
+	l := logging.New("NEVER", "INFO", "", "json")
+	return initFR(ctx, serviceName, l)
 }
 
-func NewOptions(parser *flags.Parser) *ObsOptions {
-	options := &ObsOptions{}
-	group, err := parser.AddGroup("Observability", "", options)
+func InitSoftlayer(ctx context.Context, serviceName string) (FlightRecorder, Closer) {
+	l := logging.New("WARN", "INFO", path.Join("/var/log/mixpanel/", serviceName+".log"), "text")
+	return initFR(ctx, serviceName, l)
+}
+
+func initFR(ctx context.Context, serviceName string, l logging.Logger) (FlightRecorder, Closer) {
+	sink, err := metrics.NewStatsdSink("127.0.0.1:8125")
 	if err != nil {
-		panic(err)
-	}
-	group.Namespace = "obs"
-	return options
-}
-
-func (opts *ObsOptions) Init(metricsPrefix string) {
-	opts.InitLogging()
-	if sink, err := metrics.NewStatsdSink(opts.MetricsEndpoint); err != nil {
+		l.Critical("error initializing metrics", logging.Fields{}.WithError(err))
 		panic(fmt.Errorf("error initializing metrics: %v", err))
-	} else {
-		opts.InitWithSink(metricsPrefix, sink)
+	}
+
+	mr := metrics.NewReceiver(sink).ScopePrefix(serviceName)
+	l = l.Named(serviceName)
+	tracer := opentracing.NoopTracer{}
+
+	done := make(chan struct{})
+	reportStandardMetrics(mr, done)
+
+	fr := NewFlightRecorder(serviceName, mr, l, tracer)
+	// TODO: make this work. currently obs.logging uses SetOutput on the global logging which makes this a circlular dependency
+	// log.SetOutput(stderrAdapter{fr.WithSpan(ctx)})
+
+	return fr, func() {
+		close(done)
+		sink.Close()
 	}
 }
 
-func (opts *ObsOptions) InitLogging() {
-	Log = logging.New(opts.SyslogLevel, opts.LogLevel, opts.LogPath, opts.LogFormat)
+func reportStandardMetrics(mr metrics.Receiver, done <-chan struct{}) {
+	reportGCMetrics(3*time.Second, done, mr)
+	reportVersion(done, mr)
+	reportUptime(done, mr)
 }
 
-// InitLogging should already have been invoked
-func (opts *ObsOptions) InitWithSink(metricsPrefix string, sink metrics.Sink) {
-	Sink = sink
-	receiver := metrics.NewReceiver(Sink)
-	Metrics = receiver.ScopePrefix(metricsPrefix)
-	ReportGCMetrics(3*time.Second, Metrics)
-	ReportVersion(Metrics)
-	ReportUptime(Metrics)
-}
-
-func ReportVersion(receiver metrics.Receiver) {
+func reportVersion(done <-chan struct{}, receiver metrics.Receiver) {
 	go func() {
+		next := time.After(0)
 		for {
-			receiver.SetGauge("git_version", float64(version.Int()))
-			time.Sleep(60 * time.Second)
+			select {
+			case <-done:
+				return
+			case <-next:
+				receiver.SetGauge("git_version", float64(version.Int()))
+				next = time.After(60 * time.Second)
+			}
 		}
 	}()
 }
 
-func ReportUptime(receiver metrics.Receiver) {
+func reportUptime(done <-chan struct{}, receiver metrics.Receiver) {
 	startTime := time.Now()
 	go func() {
+		next := time.After(0)
 		for {
-			uptime := time.Now().Sub(startTime)
-			receiver.SetGauge("uptime_sec", uptime.Seconds())
-			time.Sleep(60 * time.Second)
+			select {
+			case <-done:
+				return
+			case <-next:
+				uptime := time.Now().Sub(startTime)
+				receiver.SetGauge("uptime_sec", uptime.Seconds())
+				next = time.After(60 * time.Second)
+			}
 		}
 	}()
 }
 
-func RecordError(receiver metrics.Receiver, err error) {
-	if err != nil {
-		receiver.Incr("failure")
-		Log.Debug("recording error", logging.Fields{}.WithError(err))
-	} else {
-		receiver.Incr("success")
-	}
+type stderrAdapter struct {
+	fs FlightSpan
+}
+
+func (sa stderrAdapter) Write(bs []byte) (int, error) {
+	sa.fs.Info(string(bs), Vals(getCallerContext(1)))
+	return len(bs), nil
 }
