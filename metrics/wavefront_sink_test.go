@@ -42,7 +42,7 @@ func TestWavefrontSinkWithTags(t *testing.T) {
 	go newServer(endpoint)
 
 	sink := newSink(endpoint.address)
-	sink.(*wavefrontSink).tags = map[string]string{"X": "Y"}
+	sink.(*wavefrontSink).tags = map[string]string{"X": "Y", "a": "T"}
 
 	tags := Tags{
 		"a": "b",

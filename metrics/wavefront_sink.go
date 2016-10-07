@@ -49,7 +49,14 @@ func (sink *wavefrontSink) Handle(metric string, tags Tags, value float64, metri
 	_, _ = buf.WriteString(" ")
 
 	writeTags(buf, tags)
-	writeTags(buf, sink.tags)
+
+	sinkTagsToWrite := make(Tags, len(sink.tags))
+	for tag, value := range sink.tags {
+		if _, ok := tags[tag]; !ok {
+			sinkTagsToWrite[tag] = value
+		}
+	}
+	writeTags(buf, sinkTagsToWrite)
 
 	buf.WriteString("\n")
 
