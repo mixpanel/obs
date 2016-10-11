@@ -25,6 +25,8 @@ func NewFlightRecorder(name string, metrics metrics.Receiver, logger logging.Log
 	}
 }
 
+var NullFlightRecorder = NewFlightRecorder("null_recorder", metrics.Null, logging.Null, opentracing.NoopTracer{})
+
 // Tags should be used for categorizing telemetry. For example, you should use a Tag for something like
 // query_type but not query_id. Typically the cardinality of values is small.
 type Tags map[string]string
@@ -33,6 +35,20 @@ type Tags map[string]string
 // data capture. For example, the specific project_id that a log message pertains to. If the cardinality
 // of possible values is large, then Vals is the right type to use.
 type Vals map[string]interface{}
+
+func (v Vals) Dupe() Vals {
+	res := make(Vals, len(v))
+	for key, val := range v {
+		res[key] = val
+	}
+	return res
+}
+
+func (v Vals) WithError(err error) Vals {
+	res := v.Dupe()
+	res["err"] = err
+	return res
+}
 
 // FlightRecorder is a unified interface for all types of telemetry. A FlightRecorder is opinionated about
 // what is reported to each underlying system.
@@ -53,7 +69,7 @@ type Vals map[string]interface{}
 // func (s *Service) Do(ctx context.Context) {
 //     fs := s.fr.WithSpan(ctx)
 //
-//     fs.Incr("thing_happened", 1)
+//     fs.Incr("thing_happened")
 //     fs.Info("something uninteresting happened")
 //     s.doComplicatedThing(ctx)
 // }
@@ -61,8 +77,21 @@ type Vals map[string]interface{}
 // func (s *Service) doComplicatedThing(ctx context.Context) {
 //     fs, ctx, done := s.fr.WithNewSpan(ctx, "complicated_thing")
 //     defer done()
-//     fs.Incr("complicated_thing", 1)
+//     fs.Incr("complicated_thing")
+// }
 //
+// Arguments into spans should be snake cased, using all lowercase and underscores
+// This follow for counters, as well as warning / critical message types.
+// Warnings and Criticals have built-in counters, there's no need to separately count
+// For example:
+//
+// func (s *Service) someFunction(ctx context.Context) {
+//     fs, ctx, done := s.fr.WithNewSpan(ctx, "some_function")
+//     defer done()
+//     if err := s.someSubFunction(); err != nil {
+//         fs.Critical("some_function", "someFunction failed in someSubFunction", obs.Vals{}.WithErr(err))
+//     }
+//     fs.Incr("some_function.success")
 // }
 
 type DoneFunc func()
@@ -113,7 +142,8 @@ type FlightSpan interface {
 	Warn(warnType, message string, vals Vals)
 	Critical(critType, message string, vals Vals)
 
-	Incr(name string, amount float64)
+	Incr(name string)
+	IncrBy(name string, amount float64)
 	AddStat(name string, value float64)
 	SetGauge(name string, value float64)
 
@@ -255,20 +285,24 @@ func (fs *flightSpan) Info(message string, vals Vals) {
 }
 
 func (fs *flightSpan) Warn(name, message string, vals Vals) {
-	fs.mr.ScopeTags(metrics.Tags{"error": "warning"}).IncrBy(name, 1)
+	fs.mr.ScopeTags(metrics.Tags{"error": "warning"}).IncrBy(name+".warning", 1)
 	fields := fs.logFields(vals)
 	fs.l.Warn(message, fields)
 	fs.logTrace(message, fields)
 }
 
 func (fs *flightSpan) Critical(name, message string, vals Vals) {
-	fs.mr.ScopeTags(metrics.Tags{"error": "critical"}).IncrBy(name, 1)
+	fs.mr.ScopeTags(metrics.Tags{"error": "critical"}).IncrBy(name+".critical_error", 1)
 	fields := fs.logFields(vals)
 	fs.l.Error(message, fields)
 	fs.logTrace(message, fields)
 }
 
-func (fs *flightSpan) Incr(name string, amount float64) {
+func (fs *flightSpan) Incr(name string) {
+	fs.IncrBy(name, 1)
+}
+
+func (fs *flightSpan) IncrBy(name string, amount float64) {
 	fs.mr.IncrBy(name, amount)
 	fs.logTrace(fmt.Sprintf("Incr %s, value: %g", name, amount), nil)
 }

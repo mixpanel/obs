@@ -32,7 +32,7 @@ func main() {
 func spam(ctx context.Context, fr obs.FlightRecorder) {
 	fs, ctx, done := fr.WithNewSpan(ctx, "spam")
 	defer done()
-	fs.Incr("test_counter", 1)
+	fs.IncrBy("test_counter", 1)
 	sw := fs.StartStopwatch("latency")
 	defer sw.Stop()
 	fs.Info("some info message", obs.Vals{"field": "a"})
