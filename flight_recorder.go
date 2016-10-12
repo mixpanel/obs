@@ -198,8 +198,10 @@ func (fr *flightRecorder) Scope(name string, tags Tags) FlightRecorder {
 		serviceName: fr.serviceName,
 		name:        newName,
 		tags:        frTags,
-		mr:          fr.mr.Scope(name, metricTags),
-		l:           fr.l.Named(newName),
+
+		mr: fr.mr.Scope(name, metricTags),
+		l:  fr.l.Named(newName),
+		tr: fr.tr,
 	}
 }
 
