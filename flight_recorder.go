@@ -106,6 +106,7 @@ type FlightRecorder interface {
 
 	// WithNewSpan returns a new FlightSpan to which telemetry can be reported, a context.Context that
 	// can be used to propagate this Span, and a DoneFunc that should be called when the caller returns.
+	// Latency will be measured automatically by WithNewSpan, with the stop included inside the DoneFunc
 	// Typically, you want to use WithNewSpan to group telemetry into discrete meaningful operations, such
 	// as service calls.
 	WithNewSpan(ctx context.Context, opName string) (FlightSpan, context.Context, DoneFunc)
@@ -229,7 +230,11 @@ func (fr *flightRecorder) WithNewSpan(ctx context.Context, opName string) (Fligh
 		ctx:            ctx,
 		flightRecorder: fr,
 	}
-	return fs, ctx, span.Finish
+	sw := fs.StartStopwatch(opName + ".latency")
+	return fs, ctx, func() {
+		sw.Stop()
+		span.Finish()
+	}
 }
 
 type flightSpan struct {
