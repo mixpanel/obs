@@ -173,17 +173,21 @@ func (fr *flightRecorder) ScopeTags(tags Tags) FlightRecorder {
 	return fr.Scope("", tags)
 }
 
+func joinNames(lhs, rhs string) string {
+	if len(lhs) == 0 {
+		return rhs
+	} else if len(rhs) == 0 {
+		return lhs
+	}
+	return lhs + "." + rhs
+}
+
 func (fr *flightRecorder) Scope(name string, tags Tags) FlightRecorder {
 	if len(name) == 0 && len(tags) == 0 {
 		return fr
 	}
 
-	newName := fr.name + "." + name
-	if len(fr.name) == 0 {
-		newName = name
-	} else if len(name) == 0 {
-		newName = fr.name
-	}
+	newName := joinNames(fr.name, name)
 
 	frTags := make(Tags, len(tags)+len(fr.tags))
 	frTags.update(fr.tags)
@@ -216,6 +220,7 @@ func (fr *flightRecorder) WithSpan(ctx context.Context) FlightSpan {
 
 func (fr *flightRecorder) WithNewSpan(ctx context.Context, opName string) (FlightSpan, context.Context, DoneFunc) {
 	var span opentracing.Span
+	opName = joinNames(fr.name, opName)
 	if parentSpan := opentracing.SpanFromContext(ctx); parentSpan != nil {
 		span = fr.tr.StartSpan(opName, opentracing.ChildOf(parentSpan.Context()))
 	} else {
