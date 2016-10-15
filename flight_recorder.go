@@ -46,7 +46,7 @@ func (v Vals) Dupe() Vals {
 
 func (v Vals) WithError(err error) Vals {
 	res := v.Dupe()
-	res["err"] = err
+	res["err"] = fmt.Sprintf("%v", err)
 	return res
 }
 
