@@ -4,28 +4,29 @@ import (
 	"fmt"
 	"obs/logging"
 	"obs/metrics"
+	"obs/tracing"
 	"path"
 	"time"
 	"version"
 
-	"golang.org/x/net/context"
-
 	opentracing "github.com/opentracing/opentracing-go"
+
+	"golang.org/x/net/context"
 )
 
 type Closer func()
 
 func InitGCP(ctx context.Context, serviceName string) (FlightRecorder, Closer) {
 	l := logging.New("NEVER", "INFO", "", "json")
-	return initFR(ctx, serviceName, l)
+	return initFR(ctx, serviceName, l, tracing.New())
 }
 
 func InitSoftlayer(ctx context.Context, serviceName string) (FlightRecorder, Closer) {
 	l := logging.New("WARN", "INFO", path.Join("/var/log/mixpanel/", serviceName+".log"), "text")
-	return initFR(ctx, serviceName, l)
+	return initFR(ctx, serviceName, l, opentracing.NoopTracer{})
 }
 
-func initFR(ctx context.Context, serviceName string, l logging.Logger) (FlightRecorder, Closer) {
+func initFR(ctx context.Context, serviceName string, l logging.Logger, tr opentracing.Tracer) (FlightRecorder, Closer) {
 	sink, err := metrics.NewStatsdSink("127.0.0.1:8125")
 	if err != nil {
 		l.Critical("error initializing metrics", logging.Fields{}.WithError(err))
@@ -34,12 +35,11 @@ func initFR(ctx context.Context, serviceName string, l logging.Logger) (FlightRe
 
 	mr := metrics.NewReceiver(sink).ScopePrefix(serviceName)
 	l = l.Named(serviceName)
-	tracer := opentracing.NoopTracer{}
 
 	done := make(chan struct{})
 	reportStandardMetrics(mr, done)
 
-	fr := NewFlightRecorder(serviceName, mr, l, tracer)
+	fr := NewFlightRecorder(serviceName, mr, l, tr)
 	// TODO: make this work. currently obs.logging uses SetOutput on the global logging which makes this a circlular dependency
 	// log.SetOutput(stderrAdapter{fr.WithSpan(ctx)})
 

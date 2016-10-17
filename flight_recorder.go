@@ -8,6 +8,9 @@ import (
 	"time"
 	"version"
 
+	"google.golang.org/grpc"
+
+	basictracer "github.com/opentracing/basictracer-go"
 	opentracing "github.com/opentracing/opentracing-go"
 	"golang.org/x/net/context"
 )
@@ -26,6 +29,7 @@ func NewFlightRecorder(name string, metrics metrics.Receiver, logger logging.Log
 }
 
 var NullFlightRecorder = NewFlightRecorder("null_recorder", metrics.Null, logging.Null, opentracing.NoopTracer{})
+var NullFR = NullFlightRecorder
 
 // Tags should be used for categorizing telemetry. For example, you should use a Tag for something like
 // query_type but not query_id. Typically the cardinality of values is small.
@@ -116,24 +120,13 @@ type FlightRecorder interface {
 	// is doing something minor, or doesn't represent a significant logical chunk of your application.
 	WithSpan(ctx context.Context) FlightSpan
 
-	// NoCtx() GlobalFlight
+	GRPCClient() grpc.DialOption
+	GRPCStreamClient() grpc.DialOption
+	GRPCServer() grpc.ServerOption
+	GRPCStreamServer() grpc.ServerOption
+
+	WithNewSpanContext(ctx context.Context, opName string, spanCtx opentracing.SpanContext) (FlightSpan, context.Context, DoneFunc)
 }
-
-/*
-type GlobalFlight interface {
-	Debug(message string, vals Vals)
-	Info(message string, vals Vals)
-
-	Warn(name, message string, vals Vals)
-	Critical(name, message string, vals Vals)
-
-	Incr(name string, amount float64)
-	AddStat(name string, value float64)
-	SetGauge(name string, value float64)
-
-	StartStopwatch(name string) Stopwatch
-}
-*/
 
 type FlightSpan interface {
 	Trace(message string, vals Vals)
@@ -149,6 +142,9 @@ type FlightSpan interface {
 	SetGauge(name string, value float64)
 
 	StartStopwatch(name string) Stopwatch
+
+	TraceSpan() opentracing.Span
+	TraceID() (string, bool)
 }
 
 type Stopwatch interface {
@@ -180,6 +176,21 @@ func joinNames(lhs, rhs string) string {
 		return lhs
 	}
 	return lhs + "." + rhs
+}
+
+func (fr *flightRecorder) GRPCClient() grpc.DialOption {
+	return grpc.WithUnaryInterceptor(tracingUnaryClientInterceptor(fr, fr.tr))
+}
+
+func (fr *flightRecorder) GRPCStreamClient() grpc.DialOption {
+	return grpc.WithStreamInterceptor(tracingStreamClientInterceptor(fr, fr.tr))
+}
+
+func (fr *flightRecorder) GRPCServer() grpc.ServerOption {
+	return grpc.UnaryInterceptor(tracingUnaryServerInterceptor(fr, fr.tr))
+}
+func (fr *flightRecorder) GRPCStreamServer() grpc.ServerOption {
+	return grpc.StreamInterceptor(tracingStreamServerInterceptor(fr, fr.tr))
 }
 
 func (fr *flightRecorder) Scope(name string, tags Tags) FlightRecorder {
@@ -218,11 +229,23 @@ func (fr *flightRecorder) WithSpan(ctx context.Context) FlightSpan {
 	}
 }
 
+func (fs *flightSpan) TraceSpan() opentracing.Span {
+	return fs.span
+}
+
 func (fr *flightRecorder) WithNewSpan(ctx context.Context, opName string) (FlightSpan, context.Context, DoneFunc) {
+	var spanCtx opentracing.SpanContext
+	if parentSpan := opentracing.SpanFromContext(ctx); parentSpan != nil {
+		spanCtx = parentSpan.Context()
+	}
+	return fr.WithNewSpanContext(ctx, opName, spanCtx)
+}
+
+func (fr *flightRecorder) WithNewSpanContext(ctx context.Context, opName string, spanCtx opentracing.SpanContext) (FlightSpan, context.Context, DoneFunc) {
 	var span opentracing.Span
 	opName = joinNames(fr.name, opName)
-	if parentSpan := opentracing.SpanFromContext(ctx); parentSpan != nil {
-		span = fr.tr.StartSpan(opName, opentracing.ChildOf(parentSpan.Context()))
+	if spanCtx != nil {
+		span = fr.tr.StartSpan(opName, opentracing.ChildOf(spanCtx))
 	} else {
 		span = fr.tr.StartSpan(opName)
 	}
@@ -251,6 +274,16 @@ type flightSpan struct {
 	*flightRecorder
 }
 
+func (fs *flightSpan) TraceID() (string, bool) {
+	if fs.span == nil {
+		return "", false
+	}
+	if id, ok := fs.span.Context().(basictracer.SpanContext); ok {
+		return fmt.Sprintf("%032x", id.TraceID), true
+	}
+	return "", false
+}
+
 func (fs *flightSpan) logFields(vals Vals) logging.Fields {
 	fields := make(logging.Fields, len(vals)+len(fs.tags))
 	for k, v := range fs.tags {
@@ -268,6 +301,9 @@ func (fs *flightSpan) logFields(vals Vals) logging.Fields {
 	}
 
 	fields["context"] = getCallerContext(3)
+	if traceID, ok := fs.TraceID(); ok {
+		fields["trace_id"] = traceID
+	}
 	return fields
 }
 
