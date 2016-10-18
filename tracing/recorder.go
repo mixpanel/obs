@@ -26,6 +26,7 @@ func newRecorder() *recorder {
 		log.Printf("error initializing google.DefaultClient: %v", err)
 		return &recorder{}
 	}
+	// TODO: If the gRPC client is available, use that. It's not available as of 10/18/2016.
 	service, err := cloudtrace.New(client)
 	if err != nil {
 		log.Printf("error initializing cloudtrace Service: %v", err)

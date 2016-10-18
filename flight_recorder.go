@@ -120,11 +120,25 @@ type FlightRecorder interface {
 	// is doing something minor, or doesn't represent a significant logical chunk of your application.
 	WithSpan(ctx context.Context) FlightSpan
 
+	// GRPCClient returns a grpc.DialOption to use to allow this FlightRecorder to intercept and instrument
+	// Unary RPCs with that particular client. Make sure to also include GRPCStreamClient.
 	GRPCClient() grpc.DialOption
+
+	// GRPCStreamClient returns a grpc.DialOption to use to allow this FlightRecorder to intercept and instrument
+	// streaming RPCs with that particular client. Make sure to also include GRPClient.
 	GRPCStreamClient() grpc.DialOption
+
+	// GRPCServer returns a grpc.ServerOption to use to allow this FlightRecorder to intercept and instrument
+	// unary RPCs with that particular server. Make sure to also include GRPCStreamServer.
 	GRPCServer() grpc.ServerOption
+
+	// GRPCStreamServer returns a grpc.ServerOption to use to allow this FlightRecorder to intercept and instrument
+	// streaming RPCs with that particular server. Make sure to also include GRPServer.
 	GRPCStreamServer() grpc.ServerOption
 
+	// WithNewSpanContext is like WithNewSpan but allows you to specify the parent SpanContext instead of deriving it
+	// from the context.Context. This is usually only useful for libraries that derive tracing contexts from out-of-process
+	// origins, such as as GRPC request where the tracing context is embeded in GRPC Metadata.
 	WithNewSpanContext(ctx context.Context, opName string, spanCtx opentracing.SpanContext) (FlightSpan, context.Context, DoneFunc)
 }
 
