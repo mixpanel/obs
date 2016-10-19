@@ -5,6 +5,7 @@ import (
 	"io"
 	"obs/tracing"
 	"os"
+	"strings"
 
 	"github.com/opentracing/opentracing-go"
 	"github.com/opentracing/opentracing-go/ext"
@@ -28,7 +29,7 @@ func tracingUnaryClientInterceptor(fr FlightRecorder, tracer opentracing.Tracer)
 		invoker grpc.UnaryInvoker,
 		opts ...grpc.CallOption,
 	) error {
-		fs, ctx, done := fr.WithNewSpan(ctx, "grpc:"+method)
+		fs, ctx, done := fr.WithNewSpan(ctx, formatRPCName(method))
 		defer done()
 		span := fs.TraceSpan()
 		ext.SpanKind.Set(span, ext.SpanKindRPCClientEnum)
@@ -47,8 +48,12 @@ func tracingUnaryClientInterceptor(fr FlightRecorder, tracer opentracing.Tracer)
 		ctx = metadata.NewContext(ctx, md)
 
 		if err := invoker(ctx, method, req, reply, cc, opts...); err != nil {
-			fs.Info(fmt.Sprintf("error in gRPC %s", method), Vals{}.WithError(err))
-			ext.Error.Set(span, true)
+			if ctx.Err() == nil {
+				fs.Info(fmt.Sprintf("error in gRPC %s", method), Vals{}.WithError(err))
+				ext.Error.Set(span, true)
+			} else {
+				span.SetTag("canceled", true)
+			}
 			return err
 		}
 
@@ -65,7 +70,7 @@ func tracingStreamClientInterceptor(fr FlightRecorder, tracer opentracing.Tracer
 		streamer grpc.Streamer,
 		opts ...grpc.CallOption,
 	) (grpc.ClientStream, error) {
-		fs, ctx, done := fr.WithNewSpan(ctx, "grpc:"+method)
+		fs, ctx, done := fr.WithNewSpan(ctx, formatRPCName(method))
 		span := fs.TraceSpan()
 		ext.SpanKind.Set(span, ext.SpanKindRPCClientEnum)
 
@@ -84,8 +89,12 @@ func tracingStreamClientInterceptor(fr FlightRecorder, tracer opentracing.Tracer
 
 		cs, err := streamer(ctx, desc, cc, method, opts...)
 		if err != nil {
-			fs.Info(fmt.Sprintf("error in gRPC %s", method), Vals{}.WithError(err))
-			ext.Error.Set(span, true)
+			if ctx.Err() == nil {
+				fs.Info(fmt.Sprintf("error in gRPC %s", method), Vals{}.WithError(err))
+				ext.Error.Set(span, true)
+			} else {
+				span.SetTag("canceled", true)
+			}
 		}
 
 		return &clientStreamInterceptor{cs, span, done, 0, 0}, err
@@ -105,7 +114,7 @@ func tracingUnaryServerInterceptor(fr FlightRecorder, tracer opentracing.Tracer)
 		}
 		spanCtx, err := tracer.Extract(opentracing.TextMap, grpcTraceMD(md))
 
-		fs, ctx, done := fr.WithNewSpanContext(ctx, "grpc:"+info.FullMethod, spanCtx)
+		fs, ctx, done := fr.WithNewSpanContext(ctx, formatRPCName(info.FullMethod), spanCtx)
 		defer done()
 		span := fs.TraceSpan()
 		ext.SpanKind.Set(span, ext.SpanKindRPCServerEnum)
@@ -118,9 +127,13 @@ func tracingUnaryServerInterceptor(fr FlightRecorder, tracer opentracing.Tracer)
 		ctx = opentracing.ContextWithSpan(ctx, span)
 		resp, err = handler(ctx, req)
 		if err != nil {
-			fs.Info(fmt.Sprintf("error in gRPC %s", info.FullMethod), Vals{}.WithError(err))
-			ext.Error.Set(span, true)
-			span.SetTag(tracing.Label.ErrorMessage, fmt.Sprintf("%v", err))
+			if ctx.Err() == nil {
+				fs.Info(fmt.Sprintf("error in gRPC %s", info.FullMethod), Vals{}.WithError(err))
+				ext.Error.Set(span, true)
+				span.SetTag(tracing.Label.ErrorMessage, fmt.Sprintf("%v", err))
+			} else {
+				span.SetTag("canceled", true)
+			}
 			return resp, err
 		}
 		return resp, nil
@@ -141,7 +154,7 @@ func tracingStreamServerInterceptor(fr FlightRecorder, tracer opentracing.Tracer
 		}
 		spanCtx, err := tracer.Extract(opentracing.TextMap, grpcTraceMD(md))
 
-		fs, ctx, done := fr.WithNewSpanContext(ctx, "grpc:"+info.FullMethod, spanCtx)
+		fs, ctx, done := fr.WithNewSpanContext(ctx, formatRPCName(info.FullMethod), spanCtx)
 		span := fs.TraceSpan()
 		ext.SpanKind.Set(span, ext.SpanKindRPCServerEnum)
 		span.SetTag("grpc.hostname", traceHostname)
@@ -154,9 +167,13 @@ func tracingStreamServerInterceptor(fr FlightRecorder, tracer opentracing.Tracer
 		ssi := &serverStreamInterceptor{ss, span, done, 0, 0, ctx}
 		defer ssi.finish()
 		if err := handler(srv, ssi); err != nil {
-			fs.Info(fmt.Sprintf("error in gRPC %s", info.FullMethod), Vals{}.WithError(err))
-			ext.Error.Set(span, true)
-			span.SetTag(tracing.Label.ErrorMessage, fmt.Sprintf("%v", err))
+			if ctx.Err() == nil {
+				fs.Info(fmt.Sprintf("error in gRPC %s", info.FullMethod), Vals{}.WithError(err))
+				ext.Error.Set(span, true)
+				span.SetTag(tracing.Label.ErrorMessage, fmt.Sprintf("%v", err))
+			} else {
+				span.SetTag("canceled", true)
+			}
 			return err
 		}
 		return nil
@@ -259,4 +276,16 @@ func (g grpcTraceMD) ForeachKey(handler func(key, val string) error) error {
 	}
 
 	return nil
+}
+
+func formatRPCName(name string) string {
+	parts := strings.Split(strings.TrimPrefix(name, "/"), "/")
+	if len(parts) != 2 {
+		return name
+	}
+	names := strings.Split(parts[0], ".")
+	if len(names) == 0 {
+		return name
+	}
+	return names[0] + "." + parts[1]
 }
