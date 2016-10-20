@@ -278,6 +278,9 @@ func (g grpcTraceMD) ForeachKey(handler func(key, val string) error) error {
 	return nil
 }
 
+// formatRPCName takes the name as GRPC formats it (/<Namespace>.<ServiceName>/<RPCName>)
+// and turns it into <ServiceName>.<RPCName>
+// For example: /mixpanel.arb.pb.StorageServer/Tail -> StorageServer.Tail
 func formatRPCName(name string) string {
 	parts := strings.Split(strings.TrimPrefix(name, "/"), "/")
 	if len(parts) != 2 {
@@ -287,5 +290,5 @@ func formatRPCName(name string) string {
 	if len(names) == 0 {
 		return name
 	}
-	return names[0] + "." + parts[1]
+	return names[len(names)-1] + "." + parts[1]
 }
