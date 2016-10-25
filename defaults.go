@@ -9,6 +9,7 @@ import (
 	"time"
 	"version"
 
+	basictracer "github.com/opentracing/basictracer-go"
 	opentracing "github.com/opentracing/opentracing-go"
 
 	"golang.org/x/net/context"
@@ -16,9 +17,28 @@ import (
 
 type Closer func()
 
-func InitGCP(ctx context.Context, serviceName string) (FlightRecorder, Closer) {
+type Option func(*obsOptions)
+
+// SampleRate takes in an int n, and sets the sampling rate of traces to be 1 / n
+func SampleRate(n uint64) Option {
+	return func(o *obsOptions) {
+		o.tracerOpts.ShouldSample = func(traceID uint64) bool { return traceID%n == 0 }
+	}
+}
+
+type obsOptions struct {
+	tracerOpts basictracer.Options
+}
+
+func InitGCP(ctx context.Context, serviceName string, opts ...Option) (FlightRecorder, Closer) {
 	l := logging.New("NEVER", "INFO", "", "json")
-	return initFR(ctx, serviceName, l, tracing.New())
+
+	obsOpts := obsOptions{tracerOpts: basictracer.DefaultOptions()}
+	for _, o := range opts {
+		o(&obsOpts)
+	}
+
+	return initFR(ctx, serviceName, l, tracing.New(obsOpts.tracerOpts))
 }
 
 func InitSoftlayer(ctx context.Context, serviceName string) (FlightRecorder, Closer) {

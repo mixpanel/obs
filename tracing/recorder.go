@@ -16,8 +16,9 @@ import (
 	cloudtrace "google.golang.org/api/cloudtrace/v1"
 )
 
-func New() opentracing.Tracer {
-	return basictracer.New(newRecorder())
+func New(opts basictracer.Options) opentracing.Tracer {
+	opts.Recorder = newRecorder()
+	return basictracer.NewWithOptions(opts)
 }
 
 func newRecorder() *recorder {
@@ -52,6 +53,9 @@ type recorder struct {
 
 func (r *recorder) RecordSpan(raw basictracer.RawSpan) {
 	if r.svc == nil {
+		return
+	}
+	if !raw.Context.Sampled {
 		return
 	}
 
