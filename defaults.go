@@ -34,6 +34,7 @@ func InitGCP(ctx context.Context, serviceName string, opts ...Option) (FlightRec
 	l := logging.New("NEVER", "INFO", "", "json")
 
 	obsOpts := obsOptions{tracerOpts: basictracer.DefaultOptions()}
+	SampleRate(100)(&obsOpts)
 	for _, o := range opts {
 		o(&obsOpts)
 	}
