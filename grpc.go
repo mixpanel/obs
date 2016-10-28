@@ -49,7 +49,7 @@ func tracingUnaryClientInterceptor(fr FlightRecorder, tracer opentracing.Tracer)
 
 		if err := invoker(ctx, method, req, reply, cc, opts...); err != nil {
 			if ctx.Err() == nil {
-				fs.Info(fmt.Sprintf("error in gRPC %s", method), Vals{}.WithError(err))
+				fs.Trace(fmt.Sprintf("error in gRPC %s", method), Vals{}.WithError(err))
 				ext.Error.Set(span, true)
 			} else {
 				span.SetTag("canceled", true)
@@ -90,7 +90,7 @@ func tracingStreamClientInterceptor(fr FlightRecorder, tracer opentracing.Tracer
 		cs, err := streamer(ctx, desc, cc, method, opts...)
 		if err != nil {
 			if ctx.Err() == nil {
-				fs.Info(fmt.Sprintf("error in gRPC %s", method), Vals{}.WithError(err))
+				fs.Trace(fmt.Sprintf("error in gRPC %s", method), Vals{}.WithError(err))
 				ext.Error.Set(span, true)
 			} else {
 				span.SetTag("canceled", true)
@@ -128,7 +128,7 @@ func tracingUnaryServerInterceptor(fr FlightRecorder, tracer opentracing.Tracer)
 		resp, err = handler(ctx, req)
 		if err != nil {
 			if ctx.Err() == nil {
-				fs.Info(fmt.Sprintf("error in gRPC %s", info.FullMethod), Vals{}.WithError(err))
+				fs.Trace(fmt.Sprintf("error in gRPC %s", info.FullMethod), Vals{}.WithError(err))
 				ext.Error.Set(span, true)
 				span.SetTag(tracing.Label.ErrorMessage, fmt.Sprintf("%v", err))
 			} else {
@@ -168,7 +168,7 @@ func tracingStreamServerInterceptor(fr FlightRecorder, tracer opentracing.Tracer
 		defer ssi.finish()
 		if err := handler(srv, ssi); err != nil {
 			if ctx.Err() == nil {
-				fs.Info(fmt.Sprintf("error in gRPC %s", info.FullMethod), Vals{}.WithError(err))
+				fs.Trace(fmt.Sprintf("error in gRPC %s", info.FullMethod), Vals{}.WithError(err))
 				ext.Error.Set(span, true)
 				span.SetTag(tracing.Label.ErrorMessage, fmt.Sprintf("%v", err))
 			} else {

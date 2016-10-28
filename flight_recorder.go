@@ -349,6 +349,7 @@ func (fs *flightSpan) Info(message string, vals Vals) {
 func (fs *flightSpan) Warn(name, message string, vals Vals) {
 	fs.mr.ScopeTags(metrics.Tags{"error": "warning"}).IncrBy(name+".warning", 1)
 	fields := fs.logFields(vals)
+	fields["warning_log_name"] = name
 	fs.l.Warn(message, fields)
 	fs.logTrace(message, fields)
 }
@@ -356,6 +357,7 @@ func (fs *flightSpan) Warn(name, message string, vals Vals) {
 func (fs *flightSpan) Critical(name, message string, vals Vals) {
 	fs.mr.ScopeTags(metrics.Tags{"error": "critical"}).IncrBy(name+".critical_error", 1)
 	fields := fs.logFields(vals)
+	fields["critical_log_name"] = name
 	fs.l.Error(message, fields)
 	fs.logTrace(message, fields)
 }
