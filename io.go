@@ -26,6 +26,7 @@ func (rc *readCloser) Read(p []byte) (int, error) {
 	}
 	n, err := rc.rc.Read(p)
 	rc.total += int64(n)
+	rc.fs.IncrBy("bytes_read", float64(n))
 	return n, err
 }
 
@@ -57,6 +58,7 @@ func (wc *writeCloser) Write(p []byte) (int, error) {
 	}
 	n, err := wc.wc.Write(p)
 	wc.total += int64(n)
+	wc.fs.IncrBy("bytes_written", float64(n))
 	return n, err
 }
 
