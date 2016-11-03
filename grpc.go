@@ -228,6 +228,10 @@ type serverStreamInterceptor struct {
 	ctx               context.Context
 }
 
+func (ssi *serverStreamInterceptor) SetHeader(md metadata.MD) error {
+	return ssi.ss.SetHeader(md)
+}
+
 func (ssi *serverStreamInterceptor) SendHeader(md metadata.MD) error {
 	return ssi.ss.SendHeader(md)
 }
