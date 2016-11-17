@@ -140,6 +140,9 @@ type FlightRecorder interface {
 	// from the context.Context. This is usually only useful for libraries that derive tracing contexts from out-of-process
 	// origins, such as as GRPC request where the tracing context is embeded in GRPC Metadata.
 	WithNewSpanContext(ctx context.Context, opName string, spanCtx opentracing.SpanContext) (FlightSpan, context.Context, DoneFunc)
+
+	// WithRootSpan is like WithNewSpan but allows you to force a root span and set its sample rate.
+	WithRootSpan(ctx context.Context, opName string, sampleOneInN int) (FlightSpan, context.Context, DoneFunc)
 }
 
 type FlightSpan interface {
@@ -279,6 +282,15 @@ func (fr *flightRecorder) WithNewSpanContext(ctx context.Context, opName string,
 		sw.Stop()
 		span.Finish()
 	}
+}
+
+func (fr *flightRecorder) WithRootSpan(ctx context.Context, opName string, sampleOneInN int) (FlightSpan, context.Context, DoneFunc) {
+	fs, ctx, done := fr.WithNewSpanContext(ctx, opName, nil)
+
+	if sc, ok := fs.TraceSpan().Context().(basictracer.SpanContext); ok {
+		sc.Sampled = sc.TraceID%uint64(sampleOneInN) == 0
+	}
+	return fs, ctx, done
 }
 
 type flightSpan struct {
