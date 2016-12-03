@@ -56,6 +56,8 @@ func initFR(ctx context.Context, serviceName string, l logging.Logger, tr opentr
 
 	mr := metrics.NewReceiver(sink).ScopePrefix(serviceName)
 	l = l.Named(serviceName)
+	Metrics = mr
+	Log = l
 
 	done := make(chan struct{})
 	reportStandardMetrics(mr, done)

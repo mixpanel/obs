@@ -260,11 +260,11 @@ func (fr *flightRecorder) WithNewSpan(ctx context.Context, opName string) (Fligh
 
 func (fr *flightRecorder) WithNewSpanContext(ctx context.Context, opName string, spanCtx opentracing.SpanContext) (FlightSpan, context.Context, DoneFunc) {
 	var span opentracing.Span
-	opName = joinNames(fr.name, opName)
+	fullOpName := joinNames(fr.name, opName)
 	if spanCtx != nil {
-		span = fr.tr.StartSpan(opName, opentracing.ChildOf(spanCtx))
+		span = fr.tr.StartSpan(fullOpName, opentracing.ChildOf(spanCtx))
 	} else {
-		span = fr.tr.StartSpan(opName)
+		span = fr.tr.StartSpan(fullOpName)
 	}
 
 	for k, v := range fr.tags {
