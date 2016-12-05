@@ -44,6 +44,7 @@ func reportGCsSince(memstats *runtime.MemStats, lastCount uint32, r metrics.Rece
 		r.AddStat("pause_ns", float64(pauseNs))
 	}
 	r.SetGauge("heap_allocated_bytes", float64(memstats.HeapAlloc))
+	r.SetGauge("total_heap_allocated_bytes", float64(memstats.TotalAlloc))
 	r.SetGauge("system_allocated_bytes", float64(memstats.Sys))
 	return newCount
 }
