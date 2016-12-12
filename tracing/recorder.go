@@ -40,14 +40,52 @@ func newRecorder() *recorder {
 		return &recorder{}
 	}
 
-	return &recorder{
+	r := &recorder{
 		svc:     cloudtrace.NewProjectsService(service),
+		traces:  make(chan basictracer.RawSpan, 64),
 		project: project,
 	}
+
+	go func() {
+		const spanBufferSize = 128
+		buf := make([]basictracer.RawSpan, 0, spanBufferSize)
+		var tick <-chan time.Time
+
+		flush := func() {
+			tick = nil
+			if len(buf) == 0 {
+				return
+			}
+			r.flushSpans(buf)
+			buf = buf[:0]
+		}
+
+		for {
+			select {
+			case <-tick:
+				flush()
+
+			case trace := <-r.traces:
+				buf = append(buf, trace)
+
+				if len(buf) == cap(buf) {
+					// need to flush immediately, to avoid the buffer from resizing
+					flush()
+				}
+
+				if tick == nil && len(buf) > 0 {
+					tick = time.After(3 * time.Second)
+				}
+			}
+		}
+	}()
+	return r
+
 }
 
 type recorder struct {
 	svc     *cloudtrace.ProjectsService
+	traces  chan basictracer.RawSpan
 	project string
 }
 
@@ -55,14 +93,20 @@ func (r *recorder) RecordSpan(raw basictracer.RawSpan) {
 	if r.svc == nil {
 		return
 	}
+
 	if !raw.Context.Sampled {
 		return
 	}
+	r.traces <- raw
+}
 
-	// TODO: batch
-	_, err := r.svc.PatchTraces(r.project, &cloudtrace.Traces{
-		Traces: []*cloudtrace.Trace{r.rawSpanToTrace(raw)},
-	}).Do()
+func (r *recorder) flushSpans(spans []basictracer.RawSpan) {
+	traces := make([]*cloudtrace.Trace, len(spans))
+	for i := range spans {
+		traces[i] = r.rawSpanToTrace(spans[i])
+	}
+
+	_, err := r.svc.PatchTraces(r.project, &cloudtrace.Traces{Traces: traces}).Do()
 
 	if err != nil {
 		log.Printf("error sending trace to cloudtrace: %v", err)

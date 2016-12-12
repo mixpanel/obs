@@ -12,6 +12,7 @@ import (
 
 	basictracer "github.com/opentracing/basictracer-go"
 	opentracing "github.com/opentracing/opentracing-go"
+	"github.com/opentracing/opentracing-go/ext"
 	"golang.org/x/net/context"
 )
 
@@ -288,7 +289,9 @@ func (fr *flightRecorder) WithRootSpan(ctx context.Context, opName string, sampl
 	fs, ctx, done := fr.WithNewSpanContext(ctx, opName, nil)
 
 	if sc, ok := fs.TraceSpan().Context().(basictracer.SpanContext); ok {
-		sc.Sampled = sc.TraceID%uint64(sampleOneInN) == 0
+		if sc.TraceID%uint64(sampleOneInN) == 0 {
+			ext.SamplingPriority.Set(fs.TraceSpan(), 1)
+		}
 	}
 	return fs, ctx, done
 }
