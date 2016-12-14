@@ -42,13 +42,13 @@ func newRecorder() *recorder {
 
 	r := &recorder{
 		svc:     cloudtrace.NewProjectsService(service),
-		traces:  make(chan basictracer.RawSpan, 64),
+		traces:  make(chan *cloudtrace.Trace, 64),
 		project: project,
 	}
 
 	go func() {
 		const spanBufferSize = 128
-		buf := make([]basictracer.RawSpan, 0, spanBufferSize)
+		buf := make([]*cloudtrace.Trace, 0, spanBufferSize)
 		var tick <-chan time.Time
 
 		flush := func() {
@@ -85,7 +85,7 @@ func newRecorder() *recorder {
 
 type recorder struct {
 	svc     *cloudtrace.ProjectsService
-	traces  chan basictracer.RawSpan
+	traces  chan *cloudtrace.Trace
 	project string
 }
 
@@ -97,15 +97,23 @@ func (r *recorder) RecordSpan(raw basictracer.RawSpan) {
 	if !raw.Context.Sampled {
 		return
 	}
-	r.traces <- raw
+
+	r.traces <- r.rawSpanToTrace(raw)
 }
 
-func (r *recorder) flushSpans(spans []basictracer.RawSpan) {
-	traces := make([]*cloudtrace.Trace, len(spans))
-	for i := range spans {
-		traces[i] = r.rawSpanToTrace(spans[i])
+func (r *recorder) flushSpans(traces []*cloudtrace.Trace) {
+	byTraceID := make(map[string]*cloudtrace.Trace, len(traces))
+	combined := traces[:0]
+	for _, trace := range traces {
+		if byTrace, ok := byTraceID[trace.TraceId]; ok {
+			byTrace.Spans = append(byTrace.Spans, trace.Spans...)
+		} else {
+			byTraceID[trace.TraceId] = trace
+			combined = append(combined, trace)
+		}
 	}
 
+	traces = combined
 	_, err := r.svc.PatchTraces(r.project, &cloudtrace.Traces{Traces: traces}).Do()
 
 	if err != nil {
