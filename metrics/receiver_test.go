@@ -8,7 +8,6 @@ import (
 	"sync"
 	"testing"
 	"time"
-	"util"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -143,7 +142,9 @@ type testEndpoint struct {
 func (endpoint *testEndpoint) readAll() string {
 	buf := make([]byte, 64000)
 	n, err := endpoint.conn.Read(buf)
-	util.CheckFatalError(err)
+	if err != nil {
+		panic(err)
+	}
 	return strings.TrimSpace(string(buf[0:n]))
 }
 

@@ -8,7 +8,6 @@ import (
 	"strings"
 	"sync"
 	"testing"
-	"util"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -107,9 +106,12 @@ type tcpEndpoint struct {
 func newServer(endpoint *tcpEndpoint) {
 	defer endpoint.wg.Done()
 	conn, err := endpoint.listener.Accept()
-	util.CheckFatalError(err)
-	_, err = endpoint.buf.ReadFrom(conn)
-	util.CheckFatalError(err)
+	if err != nil {
+		panic(err)
+	}
+	if _, err = endpoint.buf.ReadFrom(conn); err != nil {
+		panic(err)
+	}
 }
 
 func newSink(address string) Sink {
@@ -118,9 +120,13 @@ func newSink(address string) Sink {
 
 func newTcpEndpoint() *tcpEndpoint {
 	addr, err := net.ResolveTCPAddr("tcp", "127.0.0.1:0")
-	util.CheckFatalError(err)
+	if err != nil {
+		panic(err)
+	}
 	listener, err := net.ListenTCP("tcp", addr)
-	util.CheckFatalError(err)
+	if err != nil {
+		panic(err)
+	}
 
 	return &tcpEndpoint{
 		address:  listener.Addr().String(),
