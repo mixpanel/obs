@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"sort"
+	"time"
 )
 
 type format int
@@ -16,6 +17,8 @@ const (
 )
 
 var myPid = os.Getpid()
+
+const timeFormatStr = "2006-01-02 15:04:05.000"
 
 func jsonFormatter(lvl level, name, message string, fields Fields) string {
 	fields = MergeFields(fields, localhostFields)
@@ -36,9 +39,9 @@ func textFormatter(lvl level, name, message string, fields Fields) string {
 	buffer := bytes.NewBuffer(make([]byte, 0, len(message)*2))
 
 	if name == "" {
-		fmt.Fprintf(buffer, "pid=%d [%s]: ", myPid, levelToString(lvl))
+		fmt.Fprintf(buffer, "[%s] pid=%d [%s]: ", time.Now().Format(timeFormatStr), myPid, levelToString(lvl))
 	} else {
-		fmt.Fprintf(buffer, "pid=%d [%s] %s: ", myPid, levelToString(lvl), name)
+		fmt.Fprintf(buffer, "[%s] pid=%d [%s] %s: ", time.Now().Format(timeFormatStr), myPid, levelToString(lvl), name)
 	}
 	formatFields(buffer, message, fields)
 
