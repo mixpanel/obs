@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"sync"
 	"time"
 
 	"cloud.google.com/go/compute/metadata"
@@ -16,9 +17,10 @@ import (
 	cloudtrace "google.golang.org/api/cloudtrace/v1"
 )
 
-func New(opts basictracer.Options) opentracing.Tracer {
-	opts.Recorder = newRecorder()
-	return basictracer.NewWithOptions(opts)
+func New(opts basictracer.Options) (opentracing.Tracer, func()) {
+	r := newRecorder()
+	opts.Recorder = r
+	return basictracer.NewWithOptions(opts), r.Close
 }
 
 func newRecorder() *recorder {
@@ -44,9 +46,13 @@ func newRecorder() *recorder {
 		svc:     cloudtrace.NewProjectsService(service),
 		traces:  make(chan *cloudtrace.Trace, 64),
 		project: project,
+		done:    make(chan struct{}),
 	}
 
+	r.wg.Add(1)
+
 	go func() {
+		defer r.wg.Done()
 		const spanBufferSize = 128
 		buf := make([]*cloudtrace.Trace, 0, spanBufferSize)
 		var tick <-chan time.Time
@@ -62,6 +68,9 @@ func newRecorder() *recorder {
 
 		for {
 			select {
+			case <-r.done:
+				flush()
+				return
 			case <-tick:
 				flush()
 
@@ -83,10 +92,18 @@ func newRecorder() *recorder {
 
 }
 
+func (r *recorder) Close() {
+	close(r.done)
+	r.wg.Wait()
+}
+
 type recorder struct {
 	svc     *cloudtrace.ProjectsService
 	traces  chan *cloudtrace.Trace
 	project string
+
+	done chan struct{}
+	wg   sync.WaitGroup
 }
 
 func (r *recorder) RecordSpan(raw basictracer.RawSpan) {

@@ -39,7 +39,12 @@ func InitGCP(ctx context.Context, serviceName string, opts ...Option) (FlightRec
 		o(&obsOpts)
 	}
 
-	return initFR(ctx, serviceName, l, tracing.New(obsOpts.tracerOpts))
+	tracer, closeTracer := tracing.New(obsOpts.tracerOpts)
+	fr, closer := initFR(ctx, serviceName, l, tracer)
+	return fr, func() {
+		closeTracer()
+		closer()
+	}
 }
 
 func InitSoftlayer(ctx context.Context, serviceName string) (FlightRecorder, Closer) {
