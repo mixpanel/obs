@@ -19,6 +19,24 @@ type Client interface {
 	UrlWithTracking(e *TrackedEvent, dest string) (*url.URL, error)
 }
 
+type Null struct{}
+
+func (n *Null) Track(*TrackedEvent) error {
+	return nil
+}
+
+func (n *Null) TrackBatched([]*TrackedEvent) error {
+	return nil
+}
+
+func (n *Null) Import([]*TrackedEvent) error {
+	return nil
+}
+
+func (n *Null) UrlWithTracking(*TrackedEvent, string) (*url.URL, error) {
+	return &url.URL{}, nil
+}
+
 type client struct {
 	token   string
 	apiKey  string
