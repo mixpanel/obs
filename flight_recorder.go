@@ -144,6 +144,8 @@ type FlightRecorder interface {
 
 	// WithRootSpan is like WithNewSpan but allows you to force a root span and set its sample rate.
 	WithRootSpan(ctx context.Context, opName string, sampleOneInN int) (FlightSpan, context.Context, DoneFunc)
+
+	GetReceiver() metrics.Receiver
 }
 
 type FlightSpan interface {
@@ -194,6 +196,10 @@ func joinNames(lhs, rhs string) string {
 		return lhs
 	}
 	return lhs + "." + rhs
+}
+
+func (fr *flightRecorder) GetReceiver() metrics.Receiver {
+	return fr.mr
 }
 
 func (fr *flightRecorder) GRPCClient() grpc.DialOption {
