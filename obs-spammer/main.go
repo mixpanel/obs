@@ -11,7 +11,7 @@ import (
 )
 
 func main() {
-	fr, done := obs.InitGCP(context.Background(), "obs-spammer")
+	fr, done := obs.InitGCP(context.Background(), "obs-spammer", "INFO")
 	defer done()
 	tick := time.After(0)
 	sig := make(chan os.Signal, 1)

@@ -15,6 +15,10 @@ import (
 	"golang.org/x/net/context"
 )
 
+type Options struct {
+	LogLevel string `long:"obs.log-level" description:"NEVER, DEBUG, INFO, WARN, ERROR or CRITICAL" default:"INFO"`
+}
+
 type Closer func()
 
 type Option func(*obsOptions)
@@ -30,8 +34,8 @@ type obsOptions struct {
 	tracerOpts basictracer.Options
 }
 
-func InitGCP(ctx context.Context, serviceName string, opts ...Option) (FlightRecorder, Closer) {
-	l := logging.New("NEVER", "INFO", "", "json")
+func InitGCP(ctx context.Context, serviceName, logLevel string, opts ...Option) (FlightRecorder, Closer) {
+	l := logging.New("NEVER", logLevel, "", "json")
 
 	obsOpts := obsOptions{tracerOpts: basictracer.DefaultOptions()}
 	SampleRate(100)(&obsOpts)
@@ -47,8 +51,8 @@ func InitGCP(ctx context.Context, serviceName string, opts ...Option) (FlightRec
 	}
 }
 
-func InitSoftlayer(ctx context.Context, serviceName string) (FlightRecorder, Closer) {
-	l := logging.New("WARN", "INFO", path.Join("/var/log/mixpanel/", serviceName+".log"), "text")
+func InitSoftlayer(ctx context.Context, serviceName, logLevel string) (FlightRecorder, Closer) {
+	l := logging.New("WARN", logLevel, path.Join("/var/log/mixpanel/", serviceName+".log"), "text")
 	return initFR(ctx, serviceName, l, opentracing.NoopTracer{})
 }
 
