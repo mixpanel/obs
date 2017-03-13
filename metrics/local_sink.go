@@ -11,9 +11,9 @@ import (
 	_metrics "github.com/rcrowley/go-metrics"
 )
 
-type value struct {
-	value        int64
-	unchangedFor int
+type metricKey struct {
+	metricType metricType
+	name       string
 }
 
 type localSink struct {
@@ -22,11 +22,13 @@ type localSink struct {
 	stats    _metrics.Registry
 	dst      Sink
 
-	registerLock *sync.Mutex
+	flushThreshold int64
 
-	flushLock      *sync.Mutex
-	flushThreshold int
-	flushedValues  map[string]*value
+	registerLock sync.Mutex
+	currentGen   int64
+	touched      map[metricKey]int64
+
+	flushLock sync.Mutex
 }
 
 func (sink *localSink) Handle(metric string, tags Tags, value float64, metricType metricType) error {
@@ -36,8 +38,12 @@ func (sink *localSink) Handle(metric string, tags Tags, value float64, metricTyp
 
 	formatted := metric + "|" + FormatTags(tags)
 
+	key := metricKey{metricType: metricType, name: formatted}
+
 	sink.registerLock.Lock()
 	defer sink.registerLock.Unlock()
+	sink.touched[key] = sink.currentGen
+
 	switch metricType {
 	case metricTypeCounter:
 		counter := sink.counters.Get(formatted)
@@ -69,22 +75,25 @@ func (sink *localSink) Handle(metric string, tags Tags, value float64, metricTyp
 	return nil
 }
 
-// The current implementation will not flush a counter if it was updated but the value remained the same (possibly because of an incr(0) or
-// incr(-X) followed by incr(+X).
-// TODO: Fix this if it starts becoming a problem.
-// NOTE: Caller should acquire sink.flushLock before invoking this function.
-func (sink *localSink) shouldFlush(name string, v int64) bool {
-	oldValue, ok := sink.flushedValues[name]
-	if !ok || oldValue.value != v {
-		sink.flushedValues[name] = &value{v, 1}
-		return true
-	}
-
-	oldValue.unchangedFor++
-	return oldValue.unchangedFor <= sink.flushThreshold
-}
-
 func (sink *localSink) Flush() error {
+	sink.registerLock.Lock()
+	toFlush := make(map[metricKey]int64, len(sink.touched))
+	gen := sink.currentGen
+	cutoff := gen - sink.flushThreshold
+	for k, v := range sink.touched {
+		if v > cutoff {
+			toFlush[k] = v
+		} else {
+			delete(sink.touched, k)
+		}
+	}
+	sink.currentGen++
+	sink.registerLock.Unlock()
+
+	shouldFlush := func(mt metricType, name string) bool {
+		_, ok := toFlush[metricKey{mt, name}]
+		return ok
+	}
 	sink.flushLock.Lock()
 	defer sink.flushLock.Unlock()
 
@@ -105,15 +114,17 @@ func (sink *localSink) Flush() error {
 
 		switch metric := i.(type) {
 		case _metrics.Counter:
-			if sink.shouldFlush(name, metric.Count()) {
+			if shouldFlush(metricTypeCounter, name) {
 				sink.dst.Handle(metricName, tags, float64(metric.Count()), metricTypeGauge)
 			}
 		case _metrics.GaugeFloat64:
-			sink.dst.Handle(metricName, tags, float64(metric.Value()), metricTypeGauge)
+			if shouldFlush(metricTypeGauge, name) {
+				sink.dst.Handle(metricName, tags, float64(metric.Value()), metricTypeGauge)
+			}
 		case _metrics.Histogram:
 			h := metric.Snapshot()
 			p := h.Percentiles([]float64{0.5000, 0.9000, 0.9900})
-			if sink.shouldFlush(name+".count", h.Count()) {
+			if shouldFlush(metricTypeStat, name) {
 				sink.dst.Handle(metricName+".count", tags, float64(h.Count()), metricTypeGauge)
 				sink.dst.Handle(metricName+".max", tags, float64(h.Max()), metricTypeGauge)
 				sink.dst.Handle(metricName+".min", tags, float64(h.Min()), metricTypeGauge)
@@ -145,14 +156,13 @@ func (sink *localSink) Close() {
 
 func NewLocalSink(dst Sink, flushThreshold int) Sink {
 	return &localSink{
-		counters:     _metrics.NewRegistry(),
-		gauges:       _metrics.NewRegistry(),
-		stats:        _metrics.NewRegistry(),
-		dst:          dst,
-		registerLock: &sync.Mutex{},
+		counters: _metrics.NewRegistry(),
+		gauges:   _metrics.NewRegistry(),
+		stats:    _metrics.NewRegistry(),
+		dst:      dst,
 
-		flushLock:      &sync.Mutex{},
-		flushThreshold: flushThreshold,
-		flushedValues:  make(map[string]*value),
+		flushThreshold: int64(flushThreshold),
+
+		touched: make(map[metricKey]int64),
 	}
 }
