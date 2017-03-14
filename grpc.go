@@ -97,7 +97,7 @@ func tracingStreamClientInterceptor(fr FlightRecorder, tracer opentracing.Tracer
 			}
 		}
 
-		return &clientStreamInterceptor{cs, span, done, 0, 0}, err
+		return &clientStreamInterceptor{cs, fs, span, done, 0, 0}, err
 	}
 }
 
@@ -164,7 +164,7 @@ func tracingStreamServerInterceptor(fr FlightRecorder, tracer opentracing.Tracer
 		}
 
 		ctx = opentracing.ContextWithSpan(ctx, span)
-		ssi := &serverStreamInterceptor{ss, span, done, 0, 0, ctx}
+		ssi := &serverStreamInterceptor{ss, fs, span, done, 0, 0, ctx}
 		defer ssi.finish()
 		if err := handler(srv, ssi); err != nil {
 			if ctx.Err() == nil {
@@ -182,6 +182,7 @@ func tracingStreamServerInterceptor(fr FlightRecorder, tracer opentracing.Tracer
 
 type clientStreamInterceptor struct {
 	cs                grpc.ClientStream
+	fs                FlightSpan
 	span              opentracing.Span
 	done              func()
 	inCount, outCount int
@@ -204,9 +205,11 @@ func (csi *clientStreamInterceptor) Context() context.Context {
 }
 
 func (csi *clientStreamInterceptor) SendMsg(m interface{}) error {
+	csi.fs.Incr("stream_sent")
 	csi.outCount++
 	return csi.cs.SendMsg(m)
 }
+
 func (csi *clientStreamInterceptor) RecvMsg(m interface{}) error {
 	err := csi.cs.RecvMsg(m)
 	if err == io.EOF {
@@ -215,6 +218,8 @@ func (csi *clientStreamInterceptor) RecvMsg(m interface{}) error {
 		csi.done()
 		return err
 	}
+
+	csi.fs.Incr("stream_received")
 	csi.inCount++
 
 	return err
@@ -222,6 +227,7 @@ func (csi *clientStreamInterceptor) RecvMsg(m interface{}) error {
 
 type serverStreamInterceptor struct {
 	ss                grpc.ServerStream
+	fs                FlightSpan
 	span              opentracing.Span
 	done              func()
 	inCount, outCount int
@@ -245,11 +251,13 @@ func (ssi *serverStreamInterceptor) Context() context.Context {
 }
 
 func (ssi *serverStreamInterceptor) SendMsg(m interface{}) error {
+	ssi.fs.Incr("stream_sent")
 	ssi.outCount++
 	return ssi.ss.SendMsg(m)
 }
 
 func (ssi *serverStreamInterceptor) RecvMsg(m interface{}) error {
+	ssi.fs.Incr("stream_received")
 	ssi.inCount++
 	return ssi.ss.RecvMsg(m)
 }
