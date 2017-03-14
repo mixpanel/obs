@@ -70,7 +70,8 @@ func tracingStreamClientInterceptor(fr FlightRecorder, tracer opentracing.Tracer
 		streamer grpc.Streamer,
 		opts ...grpc.CallOption,
 	) (grpc.ClientStream, error) {
-		fs, ctx, done := fr.WithNewSpan(ctx, formatRPCName(method))
+		obsName := formatRPCName(method)
+		fs, ctx, done := fr.WithNewSpan(ctx, obsName)
 		span := fs.TraceSpan()
 		ext.SpanKind.Set(span, ext.SpanKindRPCClientEnum)
 
@@ -97,7 +98,7 @@ func tracingStreamClientInterceptor(fr FlightRecorder, tracer opentracing.Tracer
 			}
 		}
 
-		return &clientStreamInterceptor{cs, fs, span, done, 0, 0}, err
+		return &clientStreamInterceptor{cs, fr.ScopeName(obsName).WithSpan(ctx), span, done, 0, 0}, err
 	}
 }
 
@@ -154,7 +155,8 @@ func tracingStreamServerInterceptor(fr FlightRecorder, tracer opentracing.Tracer
 		}
 		spanCtx, err := tracer.Extract(opentracing.TextMap, grpcTraceMD(md))
 
-		fs, ctx, done := fr.WithNewSpanContext(ctx, formatRPCName(info.FullMethod), spanCtx)
+		obsName := formatRPCName(info.FullMethod)
+		fs, ctx, done := fr.WithNewSpanContext(ctx, obsName, spanCtx)
 		span := fs.TraceSpan()
 		ext.SpanKind.Set(span, ext.SpanKindRPCServerEnum)
 		span.SetTag("grpc.hostname", traceHostname)
@@ -164,7 +166,7 @@ func tracingStreamServerInterceptor(fr FlightRecorder, tracer opentracing.Tracer
 		}
 
 		ctx = opentracing.ContextWithSpan(ctx, span)
-		ssi := &serverStreamInterceptor{ss, fs, span, done, 0, 0, ctx}
+		ssi := &serverStreamInterceptor{ss, fr.ScopeName(obsName).WithSpan(ctx), span, done, 0, 0, ctx}
 		defer ssi.finish()
 		if err := handler(srv, ssi); err != nil {
 			if ctx.Err() == nil {
