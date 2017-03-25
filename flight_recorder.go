@@ -254,6 +254,9 @@ func (fr *flightRecorder) WithSpan(ctx context.Context) FlightSpan {
 }
 
 func (fs *flightSpan) TraceSpan() opentracing.Span {
+	if fs.span == nil {
+		return noopSpan
+	}
 	return fs.span
 }
 
@@ -440,3 +443,5 @@ func getCallerContext(n int) map[string]interface{} {
 		},
 	}
 }
+
+var noopSpan = opentracing.NoopTracer{}.StartSpan("noop")
