@@ -416,8 +416,9 @@ type sw struct {
 }
 
 func (s *sw) Stop() {
-	latencyMicros := time.Now().Sub(s.startTime) / time.Microsecond
-	s.fs.AddStat(s.name+"_us", float64(latencyMicros))
+	d := time.Now().Sub(s.startTime)
+	s.fs.AddStat(s.name+"_us", float64(d/time.Microsecond))
+	s.fs.TraceSpan().SetTag(s.name, d.String())
 }
 
 func (t Tags) update(r Tags) {
