@@ -12,7 +12,7 @@ import (
 	basictracer "github.com/opentracing/basictracer-go"
 	opentracing "github.com/opentracing/opentracing-go"
 
-	"golang.org/x/net/context"
+	"context"
 )
 
 type Options struct {

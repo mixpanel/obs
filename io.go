@@ -3,7 +3,7 @@ package obs
 import (
 	"io"
 
-	"golang.org/x/net/context"
+	"context"
 )
 
 type readCloser struct {

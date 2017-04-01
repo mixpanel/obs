@@ -10,10 +10,11 @@ import (
 
 	"google.golang.org/grpc"
 
+	"context"
+
 	basictracer "github.com/opentracing/basictracer-go"
 	opentracing "github.com/opentracing/opentracing-go"
 	"github.com/opentracing/opentracing-go/ext"
-	"golang.org/x/net/context"
 )
 
 // NewFlightRecorder constructs a new FlightRecorder with the underlying metrics, logger, and tracer.
