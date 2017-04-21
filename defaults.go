@@ -6,6 +6,7 @@ import (
 	"obs/metrics"
 	"obs/tracing"
 	"path"
+	"syscall"
 	"time"
 	"version"
 
@@ -85,6 +86,7 @@ func reportStandardMetrics(mr metrics.Receiver, done <-chan struct{}) {
 	reportGCMetrics(3*time.Second, done, mr)
 	reportVersion(done, mr)
 	reportUptime(done, mr)
+	reportRusage(done, mr)
 }
 
 func reportVersion(done <-chan struct{}, receiver metrics.Receiver) {
@@ -113,6 +115,29 @@ func reportUptime(done <-chan struct{}, receiver metrics.Receiver) {
 			case <-next:
 				uptime := time.Now().Sub(startTime)
 				receiver.SetGauge("uptime_sec", uptime.Seconds())
+				next = time.After(60 * time.Second)
+			}
+		}
+	}()
+}
+
+func reportRusage(done <-chan struct{}, receiver metrics.Receiver) {
+	receiver = receiver.ScopePrefix("rusage")
+	go func() {
+		next := time.After(0)
+		for {
+			select {
+			case <-done:
+				return
+			case <-next:
+				var rusage syscall.Rusage
+				err := syscall.Getrusage(syscall.RUSAGE_SELF, &rusage)
+				if err == nil {
+					receiver.SetGauge("user_us", float64(rusage.Utime.Sec*1e6+rusage.Utime.Usec))
+					receiver.SetGauge("system_us", float64(rusage.Stime.Sec*1e6+rusage.Stime.Usec))
+					receiver.SetGauge("voluntary_cs", float64(rusage.Nvcsw))
+					receiver.SetGauge("involuntary_cs", float64(rusage.Nivcsw))
+				}
 				next = time.After(60 * time.Second)
 			}
 		}
