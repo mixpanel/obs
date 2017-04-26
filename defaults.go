@@ -5,6 +5,7 @@ import (
 	"obs/logging"
 	"obs/metrics"
 	"obs/tracing"
+	"os"
 	"path"
 	"syscall"
 	"time"
@@ -55,6 +56,12 @@ func InitGCP(ctx context.Context, serviceName, logLevel string, opts ...Option) 
 func InitSoftlayer(ctx context.Context, serviceName, logLevel string) (FlightRecorder, Closer) {
 	l := logging.New("WARN", logLevel, path.Join("/var/log/mixpanel/", serviceName+".log"), "text")
 	return initFR(ctx, serviceName, l, opentracing.NoopTracer{})
+}
+
+func InitCli(ctx context.Context, logLevel string) (FlightRecorder, Closer) {
+	fr := NewFlightRecorder(os.Args[0], metrics.Null, logging.New(logLevel, logLevel, "", "text"),
+		opentracing.NoopTracer{})
+	return fr, func() {}
 }
 
 func initFR(ctx context.Context, serviceName string, l logging.Logger, tr opentracing.Tracer) (FlightRecorder, Closer) {
