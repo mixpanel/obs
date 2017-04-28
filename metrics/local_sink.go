@@ -31,17 +31,45 @@ type localSink struct {
 	flushLock sync.Mutex
 }
 
+var (
+	// Latency thresholds referenced in SLx docs:
+	// App API Only: 50ms
+	// Webapp API Time to Rendered: 200ms
+	//            Time to Interactive: 500ms
+	// Arb3 Query: 1s, 30s
+	// Decide: 200ms
+	// Ephemeral Store: 100ms
+	// Ingestion: 5 minutes, 100ms
+	latencyBounds = map[string][]int64{
+		"arb.distributed_query_server.latency_us": {
+			0,
+			250000,
+			500000,
+			1000000,
+			5000000,
+			15000000,
+			30000000,
+			60000000,
+		},
+	}
+)
+
 func (sink *localSink) Handle(metric string, tags Tags, value float64, metricType metricType) error {
 	if len(metric) == 0 {
 		return errors.New("cannot handle empty metric")
 	}
 
+	sink.registerLock.Lock()
+	defer sink.registerLock.Unlock()
+
+	return sink.handleLocked(metric, tags, value, metricType)
+}
+
+func (sink *localSink) handleLocked(metric string, tags Tags, value float64, metricType metricType) error {
 	formatted := metric + "|" + FormatTags(tags)
 
 	key := metricKey{metricType: metricType, name: formatted}
 
-	sink.registerLock.Lock()
-	defer sink.registerLock.Unlock()
 	sink.touched[key] = sink.currentGen
 
 	switch metricType {
@@ -69,6 +97,19 @@ func (sink *localSink) Handle(metric string, tags Tags, value float64, metricTyp
 			defer sink.stats.Register(formatted, stat)
 		}
 		stat.(_metrics.Histogram).Update(int64(value))
+		for suffix, bounds := range latencyBounds {
+			if !strings.HasSuffix(metric, suffix) {
+				continue
+			}
+			for _, bound := range bounds {
+				counterName := fmt.Sprintf("%s.greater_than.%d", metric, bound)
+				if value >= float64(bound) {
+					sink.handleLocked(counterName, tags, 1, metricTypeCounter)
+				} else {
+					sink.handleLocked(counterName, tags, 0, metricTypeCounter)
+				}
+			}
+		}
 	default:
 		return errors.New(fmt.Sprintf("unknown metric type: %s", metricType))
 	}

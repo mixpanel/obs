@@ -128,19 +128,19 @@ func TestLocalSinkGaugeWithTags(t *testing.T) {
 	assert.NotEqual(t, test.stats[0], test.stats[1])
 }
 
+func unpackFlushed(s string) (string, float64, string) {
+	var v float64
+	split := strings.Split(s, " ")
+	fmt.Sscanf(split[2], "%g", &v)
+	return split[0], v, split[3]
+}
+
 func TestLocalSinkStat(t *testing.T) {
 	local, test := newLocalTestSink()
 	for i := 1; i <= 100; i++ {
 		local.Handle("test", nil, float64(i), metricTypeStat)
 	}
 	local.Flush()
-
-	getValues := func(s string) (string, float64, string) {
-		var v float64
-		split := strings.Split(s, " ")
-		fmt.Sscanf(split[2], "%g", &v)
-		return split[0], v, split[3]
-	}
 
 	mp := map[string]bool{
 		formatMetric("test.count", nil, 100, metricTypeGauge):       true,
@@ -156,7 +156,7 @@ func TestLocalSinkStat(t *testing.T) {
 	mpStats := make(map[string]bool)
 
 	for _, s := range test.stats {
-		name, value, mt := getValues(s)
+		name, value, mt := unpackFlushed(s)
 		mpStats[formatMetric(name, nil, float64(math.Floor(value)), metricType(mt))] = true
 	}
 
@@ -169,13 +169,6 @@ func TestLocalSinkStatWithTags(t *testing.T) {
 		local.Handle("test", Tags{"a": "b"}, float64(i), metricTypeStat)
 	}
 	local.Flush()
-
-	getValues := func(s string) (string, float64, string) {
-		var v float64
-		split := strings.Split(s, " ")
-		fmt.Sscanf(split[2], "%g", &v)
-		return split[0], v, split[3]
-	}
 
 	mp := map[string]bool{
 		formatMetric("test.count", Tags{"a": "b"}, 100, metricTypeGauge):       true,
@@ -191,11 +184,58 @@ func TestLocalSinkStatWithTags(t *testing.T) {
 	mpStats := make(map[string]bool)
 
 	for _, s := range test.stats {
-		name, value, mt := getValues(s)
+		name, value, mt := unpackFlushed(s)
 		mpStats[formatMetric(name, Tags{"a": "b"}, float64(math.Floor(value)), metricType(mt))] = true
 	}
 
 	assert.Equal(t, mp, mpStats)
+}
+
+func TestLocalSinkCumulativeFrequency(t *testing.T) {
+	local, test := newLocalTestSink()
+	for i := 100000; i <= 100000000; i *= 2 {
+		// Cumulative frequency counters should be created for this metric.
+		local.Handle("arb.distributed_query_server.latency_us", Tags{"a": "b"}, float64(i), metricTypeStat)
+		// No cumulative frequency counters should be created for this metrics.
+		local.Handle("foo", Tags{"a": "b"}, float64(i), metricTypeStat)
+	}
+	local.Flush()
+
+	metric := "arb.distributed_query_server.latency_us"
+	expected := map[string]bool{
+		formatMetric(metric + ".greater_than.250000", Tags{"a": "b"}, 8, metricTypeGauge):   true,
+		formatMetric(metric + ".greater_than.500000", Tags{"a": "b"}, 7, metricTypeGauge):   true,
+		formatMetric(metric + ".greater_than.1000000", Tags{"a": "b"}, 6, metricTypeGauge):  true,
+		formatMetric(metric + ".greater_than.5000000", Tags{"a": "b"}, 4, metricTypeGauge):  true,
+		formatMetric(metric + ".greater_than.15000000", Tags{"a": "b"}, 2, metricTypeGauge): true,
+		formatMetric(metric + ".greater_than.30000000", Tags{"a": "b"}, 1, metricTypeGauge): true,
+		formatMetric(metric + ".greater_than.60000000", Tags{"a": "b"}, 0, metricTypeGauge): true,
+	}
+
+	notExpected := map[string]bool{
+		formatMetric("foo.greater_than.250000", Tags{"a": "b"}, 8, metricTypeGauge):   true,
+		formatMetric("foo.greater_than.500000", Tags{"a": "b"}, 7, metricTypeGauge):   true,
+		formatMetric("foo.greater_than.1000000", Tags{"a": "b"}, 6, metricTypeGauge):  true,
+		formatMetric("foo.greater_than.5000000", Tags{"a": "b"}, 4, metricTypeGauge):  true,
+		formatMetric("foo.greater_than.15000000", Tags{"a": "b"}, 2, metricTypeGauge): true,
+		formatMetric("foo.greater_than.30000000", Tags{"a": "b"}, 1, metricTypeGauge): true,
+		formatMetric("foo.greater_than.60000000", Tags{"a": "b"}, 0, metricTypeGauge): true,
+	}
+
+	actual := make(map[string]bool)
+
+	for _, s := range test.stats {
+		name, value, mt := unpackFlushed(s)
+		actual[formatMetric(name, Tags{"a": "b"}, float64(math.Floor(value)), metricType(mt))] = true
+	}
+
+	for key := range expected {
+		assert.Contains(t, actual, key)
+	}
+
+	for key := range notExpected {
+		assert.NotContains(t, actual, key)
+	}
 }
 
 func newLocalTestSink() (Sink, *testSink) {
