@@ -42,7 +42,6 @@ var (
 	// Ingestion: 5 minutes, 100ms
 	latencyBounds = map[string][]int64{
 		"arb.distributed_query_server.latency_us": {
-			0,
 			250000,
 			500000,
 			1000000,
@@ -102,13 +101,14 @@ func (sink *localSink) handleLocked(metric string, tags Tags, value float64, met
 				continue
 			}
 			for _, bound := range bounds {
-				counterName := fmt.Sprintf("%s.greater_than.%d", metric, bound)
-				if value >= float64(bound) {
+				counterName := fmt.Sprintf("%s.less_than.%d", metric, bound)
+				if value < float64(bound) {
 					sink.handleLocked(counterName, tags, 1, metricTypeCounter)
 				} else {
 					sink.handleLocked(counterName, tags, 0, metricTypeCounter)
 				}
 			}
+			sink.handleLocked(metric + ".less_than.inf", tags, 1, metricTypeCounter)
 		}
 	default:
 		return errors.New(fmt.Sprintf("unknown metric type: %s", metricType))
