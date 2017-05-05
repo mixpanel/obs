@@ -108,7 +108,7 @@ func (sink *localSink) handleLocked(metric string, tags Tags, value float64, met
 					sink.handleLocked(counterName, tags, 0, metricTypeCounter)
 				}
 			}
-			sink.handleLocked(metric + ".less_than.inf", tags, 1, metricTypeCounter)
+			sink.handleLocked(metric+".less_than.inf", tags, 1, metricTypeCounter)
 		}
 	default:
 		return errors.New(fmt.Sprintf("unknown metric type: %s", metricType))

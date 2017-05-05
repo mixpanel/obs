@@ -203,25 +203,25 @@ func TestLocalSinkCumulativeFrequency(t *testing.T) {
 
 	metric := "arb.distributed_query_server.latency_us"
 	expected := map[string]bool{
-		formatMetric(metric + ".less_than.250000", Tags{"a": "b"}, 2, metricTypeGauge):   true,
-		formatMetric(metric + ".less_than.500000", Tags{"a": "b"}, 3, metricTypeGauge):   true,
-		formatMetric(metric + ".less_than.1000000", Tags{"a": "b"}, 4, metricTypeGauge):  true,
-		formatMetric(metric + ".less_than.5000000", Tags{"a": "b"}, 6, metricTypeGauge):  true,
-		formatMetric(metric + ".less_than.15000000", Tags{"a": "b"}, 8, metricTypeGauge): true,
-		formatMetric(metric + ".less_than.30000000", Tags{"a": "b"}, 9, metricTypeGauge): true,
-		formatMetric(metric + ".less_than.60000000", Tags{"a": "b"}, 10, metricTypeGauge): true,
-		formatMetric(metric + ".less_than.inf", Tags{"a": "b"}, 10, metricTypeGauge): true,
+		formatMetric(metric+".less_than.250000", Tags{"a": "b"}, 2, metricTypeGauge):    true,
+		formatMetric(metric+".less_than.500000", Tags{"a": "b"}, 3, metricTypeGauge):    true,
+		formatMetric(metric+".less_than.1000000", Tags{"a": "b"}, 4, metricTypeGauge):   true,
+		formatMetric(metric+".less_than.5000000", Tags{"a": "b"}, 6, metricTypeGauge):   true,
+		formatMetric(metric+".less_than.15000000", Tags{"a": "b"}, 8, metricTypeGauge):  true,
+		formatMetric(metric+".less_than.30000000", Tags{"a": "b"}, 9, metricTypeGauge):  true,
+		formatMetric(metric+".less_than.60000000", Tags{"a": "b"}, 10, metricTypeGauge): true,
+		formatMetric(metric+".less_than.inf", Tags{"a": "b"}, 10, metricTypeGauge):      true,
 	}
 
 	notExpected := map[string]bool{
-		formatMetric("foo.less_than.250000", Tags{"a": "b"}, 2, metricTypeGauge):   true,
-		formatMetric("foo.less_than.500000", Tags{"a": "b"}, 3, metricTypeGauge):   true,
-		formatMetric("foo.less_than.1000000", Tags{"a": "b"}, 4, metricTypeGauge):  true,
-		formatMetric("foo.less_than.5000000", Tags{"a": "b"}, 6, metricTypeGauge):  true,
-		formatMetric("foo.less_than.15000000", Tags{"a": "b"}, 8, metricTypeGauge): true,
-		formatMetric("foo.less_than.30000000", Tags{"a": "b"}, 9, metricTypeGauge): true,
+		formatMetric("foo.less_than.250000", Tags{"a": "b"}, 2, metricTypeGauge):    true,
+		formatMetric("foo.less_than.500000", Tags{"a": "b"}, 3, metricTypeGauge):    true,
+		formatMetric("foo.less_than.1000000", Tags{"a": "b"}, 4, metricTypeGauge):   true,
+		formatMetric("foo.less_than.5000000", Tags{"a": "b"}, 6, metricTypeGauge):   true,
+		formatMetric("foo.less_than.15000000", Tags{"a": "b"}, 8, metricTypeGauge):  true,
+		formatMetric("foo.less_than.30000000", Tags{"a": "b"}, 9, metricTypeGauge):  true,
 		formatMetric("foo.less_than.60000000", Tags{"a": "b"}, 10, metricTypeGauge): true,
-		formatMetric("foo.less_than.inf", Tags{"a": "b"}, 10, metricTypeGauge): true,
+		formatMetric("foo.less_than.inf", Tags{"a": "b"}, 10, metricTypeGauge):      true,
 	}
 
 	actual := make(map[string]bool)
