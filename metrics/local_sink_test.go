@@ -10,8 +10,25 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+var (
+	perMetricCumulativeHistogramBounds = PerMetricCumulativeHistogramBounds{
+		{
+			"arb.distributed_query_server.latency_us",
+			[]int64{
+				250 * 1000,
+				500 * 1000,
+				1 * 1000 * 1000,
+				5 * 1000 * 1000,
+				15 * 1000 * 1000,
+				30 * 1000 * 1000,
+				60 * 1000 * 1000,
+			},
+		},
+	}
+)
+
 func BenchmarkLocalSinkCounters(b *testing.B) {
-	sink := NewLocalSink(NullSink, 1e18)
+	sink := NewLocalSink(NullSink, 1e18, nil)
 	for i := 0; i < b.N; i++ {
 		sink.Handle(fmt.Sprintf("metric_%d", rand.Intn(10)), Tags{
 			"a": "A",
@@ -21,7 +38,7 @@ func BenchmarkLocalSinkCounters(b *testing.B) {
 }
 
 func BenchmarkLocalSinkStats(b *testing.B) {
-	sink := NewLocalSink(NullSink, 1e18)
+	sink := NewLocalSink(NullSink, 1e18, nil)
 	for i := 0; i < b.N; i++ {
 		sink.Handle(fmt.Sprintf("metric_%d", rand.Intn(10)), Tags{
 			"a": "A",
@@ -31,7 +48,7 @@ func BenchmarkLocalSinkStats(b *testing.B) {
 }
 
 func BenchmarkLocalSinkFlush(b *testing.B) {
-	sink := NewLocalSink(NullSink, 1e18)
+	sink := NewLocalSink(NullSink, 1e18, nil)
 
 	for i := 0; i < 1000; i++ {
 		sink.Handle(fmt.Sprintf("counter_%d", i), nil, 1.0, "ct")
@@ -55,7 +72,7 @@ func TestLocalSinkCounter(t *testing.T) {
 
 func TestLocalSinkCounterWithFlushThreshold(t *testing.T) {
 	test := &testSink{}
-	local := NewLocalSink(test, 1)
+	local := NewLocalSink(test, 1, nil)
 
 	local.Handle("test", nil, 1, metricTypeCounter)
 
@@ -242,7 +259,7 @@ func TestLocalSinkCumulativeFrequency(t *testing.T) {
 
 func newLocalTestSink() (Sink, *testSink) {
 	dst := &testSink{}
-	local := NewLocalSink(dst, 1e18)
+	local := NewLocalSink(dst, 1e18, perMetricCumulativeHistogramBounds)
 	return local, dst
 }
 

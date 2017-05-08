@@ -16,11 +16,16 @@ type metricKey struct {
 	name       string
 }
 
+type PerMetricCumulativeHistogramBounds []struct{Suffix string; Bounds []int64}
+
 type localSink struct {
 	counters _metrics.Registry
 	gauges   _metrics.Registry
 	stats    _metrics.Registry
 	dst      Sink
+
+	// See the documentation for NewLocalSink for how perMetricCumulativeHistogramBounds is used.
+	perMetricCumulativeHistogramBounds PerMetricCumulativeHistogramBounds
 
 	flushThreshold int64
 
@@ -30,28 +35,6 @@ type localSink struct {
 
 	flushLock sync.Mutex
 }
-
-var (
-	// Latency thresholds referenced in SLx docs:
-	// App API Only: 50ms
-	// Webapp API Time to Rendered: 200ms
-	//            Time to Interactive: 500ms
-	// Arb3 Query: 1s, 30s
-	// Decide: 200ms
-	// Ephemeral Store: 100ms
-	// Ingestion: 5 minutes, 100ms
-	latencyBounds = map[string][]int64{
-		"arb.distributed_query_server.latency_us": {
-			250000,
-			500000,
-			1000000,
-			5000000,
-			15000000,
-			30000000,
-			60000000,
-		},
-	}
-)
 
 func (sink *localSink) Handle(metric string, tags Tags, value float64, metricType metricType) error {
 	if len(metric) == 0 {
@@ -96,19 +79,21 @@ func (sink *localSink) handleLocked(metric string, tags Tags, value float64, met
 			defer sink.stats.Register(formatted, stat)
 		}
 		stat.(_metrics.Histogram).Update(int64(value))
-		for suffix, bounds := range latencyBounds {
-			if !strings.HasSuffix(metric, suffix) {
+		for _, pair := range sink.perMetricCumulativeHistogramBounds {
+			if !strings.HasSuffix(metric, pair.Suffix) {
 				continue
 			}
-			for _, bound := range bounds {
+			for idx := len(pair.Bounds) - 1; idx >= 0; idx -= 1 {
+				bound := pair.Bounds[idx]
 				counterName := fmt.Sprintf("%s.less_than.%d", metric, bound)
 				if value < float64(bound) {
 					sink.handleLocked(counterName, tags, 1, metricTypeCounter)
 				} else {
-					sink.handleLocked(counterName, tags, 0, metricTypeCounter)
+					break
 				}
 			}
 			sink.handleLocked(metric+".less_than.inf", tags, 1, metricTypeCounter)
+			break
 		}
 	default:
 		return errors.New(fmt.Sprintf("unknown metric type: %s", metricType))
@@ -195,12 +180,20 @@ func (sink *localSink) Close() {
 	sink.stats.UnregisterAll()
 }
 
-func NewLocalSink(dst Sink, flushThreshold int) Sink {
+// perMetricCumulativeHistogramBounds is used to specify for which metrics cumulative histogram
+// counters should be reported, and what bucket boundaries to use. For example, if it contains an entry
+// {"foo", {1, 10, 100}}, for any metricTypeStat metric named *foo, four additional counters will be
+// created, with suffixes ".less_than.{1,10,100,inf}" appended to the original metric name, representing
+// the number of observations with observed values less than 1, 10, 100, and infinity, respectively. If
+// multiple entries match a given metric, the first match will be used.
+func NewLocalSink(dst Sink, flushThreshold int, perMetricCumulativeHistogramBounds PerMetricCumulativeHistogramBounds) Sink {
 	return &localSink{
 		counters: _metrics.NewRegistry(),
 		gauges:   _metrics.NewRegistry(),
 		stats:    _metrics.NewRegistry(),
 		dst:      dst,
+
+		perMetricCumulativeHistogramBounds: perMetricCumulativeHistogramBounds,
 
 		flushThreshold: int64(flushThreshold),
 
