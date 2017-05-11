@@ -16,7 +16,10 @@ type metricKey struct {
 	name       string
 }
 
-type PerMetricCumulativeHistogramBounds []struct{Suffix string; Bounds []int64}
+type PerMetricCumulativeHistogramBounds []struct {
+	Suffix string
+	Bounds []int64
+}
 
 type localSink struct {
 	counters _metrics.Registry
