@@ -5,6 +5,7 @@ import (
 	"obs/logging"
 	"obs/metrics"
 	"runtime"
+	"sync"
 	"time"
 	"version"
 
@@ -27,6 +28,8 @@ func NewFlightRecorder(name string, metrics metrics.Receiver, logger logging.Log
 		mr: metrics,
 		l:  logger,
 		tr: tracer,
+
+		scoped: make(map[string]*flightRecorder),
 	}
 }
 
@@ -180,6 +183,9 @@ type flightRecorder struct {
 	mr metrics.Receiver
 	l  logging.Logger
 	tr opentracing.Tracer
+
+	mu     sync.Mutex
+	scoped map[string]*flightRecorder
 }
 
 func (fr *flightRecorder) ScopeName(name string) FlightRecorder {
@@ -218,11 +224,7 @@ func (fr *flightRecorder) GRPCStreamServer() grpc.ServerOption {
 	return grpc.StreamInterceptor(tracingStreamServerInterceptor(fr, fr.tr))
 }
 
-func (fr *flightRecorder) Scope(name string, tags Tags) FlightRecorder {
-	if len(name) == 0 && len(tags) == 0 {
-		return fr
-	}
-
+func (fr *flightRecorder) mkScoped(name string, tags Tags) *flightRecorder {
 	newName := joinNames(fr.name, name)
 
 	frTags := make(Tags, len(tags)+len(fr.tags))
@@ -242,7 +244,29 @@ func (fr *flightRecorder) Scope(name string, tags Tags) FlightRecorder {
 		mr: fr.mr.Scope(name, metricTags),
 		l:  fr.l.Named(newName),
 		tr: fr.tr,
+
+		scoped: make(map[string]*flightRecorder),
 	}
+}
+
+func (fr *flightRecorder) Scope(name string, tags Tags) FlightRecorder {
+	if len(name) == 0 && len(tags) == 0 {
+		return fr
+	}
+
+	// can't cache if there are tags
+	if tags != nil {
+		return fr.mkScoped(name, tags)
+	}
+
+	fr.mu.Lock()
+	defer fr.mu.Unlock()
+	if sfr, ok := fr.scoped[name]; ok {
+		return sfr
+	}
+	sfr := fr.mkScoped(name, tags)
+	fr.scoped[name] = sfr
+	return sfr
 }
 
 func (fr *flightRecorder) WithSpan(ctx context.Context) FlightSpan {
