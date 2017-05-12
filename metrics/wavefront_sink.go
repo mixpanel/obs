@@ -24,9 +24,9 @@ type wavefrontSink struct {
 func writeTags(buf *bytes.Buffer, tags Tags) {
 	for k, v := range tags {
 		buf.WriteString(k)
-		buf.WriteString("=")
+		buf.WriteString("=\"")
 		buf.WriteString(v)
-		buf.WriteString(" ")
+		buf.WriteString("\" ")
 	}
 }
 

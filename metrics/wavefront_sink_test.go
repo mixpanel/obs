@@ -61,9 +61,9 @@ func TestWavefrontSinkWithTags(t *testing.T) {
 	assert.Equal(t, "host=localhost", split[3])
 
 	mp := map[string]bool{
-		"a=b": true,
-		"c=d": true,
-		"X=Y": true,
+		"a=\"b\"": true,
+		"c=\"d\"": true,
+		"X=\"Y\"": true,
 	}
 
 	assert.False(t, split[4] == split[5])
