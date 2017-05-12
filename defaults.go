@@ -2,6 +2,7 @@ package obs
 
 import (
 	"fmt"
+	"obs/closesig"
 	"obs/logging"
 	"obs/metrics"
 	"obs/tracing"
@@ -37,6 +38,7 @@ type obsOptions struct {
 }
 
 func InitGCP(ctx context.Context, serviceName, logLevel string, opts ...Option) (FlightRecorder, Closer) {
+	sig := closesig.Client(closesig.DefaultPort)
 	l := logging.New("NEVER", logLevel, "", "json")
 
 	obsOpts := obsOptions{tracerOpts: basictracer.DefaultOptions()}
@@ -50,6 +52,7 @@ func InitGCP(ctx context.Context, serviceName, logLevel string, opts ...Option) 
 	return fr, func() {
 		closeTracer()
 		closer()
+		sig()
 	}
 }
 
