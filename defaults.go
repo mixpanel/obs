@@ -33,6 +33,10 @@ func SampleRate(n uint64) Option {
 	}
 }
 
+var NoTraces Option = func(o *obsOptions) {
+	o.tracerOpts.ShouldSample = func(traceID uint64) bool { return false }
+}
+
 type obsOptions struct {
 	tracerOpts basictracer.Options
 }
