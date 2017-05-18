@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"obs/logging"
 	"obs/metrics"
+	"obs/obserr"
 	"runtime"
 	"sync"
 	"time"
@@ -55,6 +56,13 @@ func (v Vals) Dupe() Vals {
 
 func (v Vals) WithError(err error) Vals {
 	res := v.Dupe()
+
+	if e, ok := err.(*obserr.Error); ok {
+		for k, val := range e.Vals() {
+			res[k] = val
+		}
+	}
+
 	res["err"] = fmt.Sprintf("%v", err)
 	return res
 }
