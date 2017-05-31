@@ -104,7 +104,7 @@ func (r *reporter) report(ctx context.Context) error {
 	secondsSinceLast := now.Sub(r.lastRun).Seconds()
 	podSet := make(map[podKey]struct{})
 	podsToDelete := r.lastPods
-	for _, pod := range pods.Items {
+	for i, pod := range pods.Items {
 		key := podKey{pod.ObjectMeta.Name, pod.ObjectMeta.Namespace}
 		delete(podsToDelete, key)
 		podSet[key] = struct{}{}
@@ -125,6 +125,11 @@ func (r *reporter) report(ctx context.Context) error {
 			})
 			containerFS := containerFR.WithSpan(ctx)
 			containerFS.SetGauge("container.restarts", float64(container.RestartCount))
+		}
+		if i%100 == 0 {
+			// sleep to prevent statsd from dropping UDP packets by flooding it
+			// with a bunch of stats at once.
+			time.Sleep(20 * time.Millisecond)
 		}
 	}
 	r.lastRun = now
