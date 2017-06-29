@@ -63,7 +63,11 @@ func (v Vals) WithError(err error) Vals {
 		}
 	}
 
+	code := grpc.Code(err)
+	name := code.String()
+
 	res["err"] = fmt.Sprintf("%v", err)
+	res["grpc_code"] = fmt.Sprintf("%d: %s", code, name)
 	return res
 }
 
