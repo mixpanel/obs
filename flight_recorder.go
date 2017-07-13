@@ -54,6 +54,14 @@ func (v Vals) Dupe() Vals {
 	return res
 }
 
+func (v Vals) Merge(m Vals) Vals {
+	new := v.Dupe()
+	for key, val := range m {
+		new[key] = val
+	}
+	return new
+}
+
 func (v Vals) WithError(err error) Vals {
 	res := v.Dupe()
 
