@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"obs/logging"
 	"obs/metrics"
-	"obs/obserr"
 	"runtime"
 	"sync"
 	"time"
@@ -62,10 +61,14 @@ func (v Vals) Merge(m Vals) Vals {
 	return new
 }
 
+type errWithVals interface {
+	Vals() map[string]interface{}
+}
+
 func (v Vals) WithError(err error) Vals {
 	res := v.Dupe()
 
-	if e, ok := err.(*obserr.Error); ok {
+	if e, ok := err.(errWithVals); ok {
 		for k, val := range e.Vals() {
 			res[k] = val
 		}
