@@ -6,7 +6,6 @@ import (
 	"obs/logging"
 	"obs/metrics"
 	"obs/tracing"
-	"os"
 	"path"
 	"syscall"
 	"time"
@@ -65,8 +64,8 @@ func InitSoftlayer(ctx context.Context, serviceName, logLevel string) (FlightRec
 	return initFR(ctx, serviceName, l, opentracing.NoopTracer{})
 }
 
-func InitCli(ctx context.Context, logLevel string) (FlightRecorder, Closer) {
-	fr := NewFlightRecorder(os.Args[0], metrics.Null, logging.New(logLevel, logLevel, "", "text"),
+func InitCli(ctx context.Context, name, logLevel string) (FlightRecorder, Closer) {
+	fr := NewFlightRecorder(name, metrics.Null, logging.New(logLevel, logLevel, "", "text"),
 		opentracing.NoopTracer{})
 	return fr, func() {}
 }
