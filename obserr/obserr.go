@@ -12,8 +12,8 @@ import (
 // This should be used in conjunction with go/src/obs/flight_recorder.go's Vals type
 // where the actual telemetry/reporting happens.
 type Error struct {
-	err  error
-	vals map[string]interface{}
+	orig, err error
+	vals      map[string]interface{}
 }
 
 func New(e interface{}) *Error {
@@ -31,6 +31,7 @@ func New(e interface{}) *Error {
 	}
 
 	return &Error{
+		orig: err,
 		err:  err,
 		vals: make(map[string]interface{}),
 	}
@@ -75,4 +76,11 @@ func (e *Error) Annotate(ann interface{}) *Error {
 
 func Annotate(e error, an interface{}) *Error {
 	return New(e).Annotate(an)
+}
+
+func Original(e error) error {
+	if oe, ok := e.(*Error); ok {
+		return oe.orig
+	}
+	return e
 }

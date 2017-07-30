@@ -8,8 +8,10 @@ import (
 )
 
 func TestErrorsNew(t *testing.T) {
+	err := errors.New("lit")
 	e := &Error{
-		err:  errors.New("lit"),
+		orig: err,
+		err:  err,
 		vals: make(map[string]interface{}),
 	}
 
@@ -51,4 +53,13 @@ func TestErrorsAnnotate(t *testing.T) {
 
 	e = Annotate(errors.New("actually."), "but")
 	assert.Equal(t, "but: actually.", e.Error())
+}
+
+func TestErrorsOriginal(t *testing.T) {
+	o := errors.New("Test!")
+
+	e := New(o).Annotate("foo").Set("a", "b").Annotate("bar")
+
+	assert.Equal(t, o, Original(e))
+	assert.Equal(t, o, Original(o))
 }
