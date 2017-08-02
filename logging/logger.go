@@ -87,6 +87,7 @@ func (l *logger) Named(name string) Logger {
 		syslogLevel:   l.syslogLevel,
 		gologgerLevel: l.gologgerLevel,
 		minLevel:      l.minLevel,
+		format:        l.format,
 	}
 }
 
