@@ -40,6 +40,8 @@ type obsOptions struct {
 	tracerOpts basictracer.Options
 }
 
+// TODO(shimin): InitGCP should be able to set default tags (project, cluster, host) from metadata service.
+// It should also allow the caller to pass in other tags.
 func InitGCP(ctx context.Context, serviceName, logLevel string, opts ...Option) (FlightRecorder, Closer) {
 	sig := closesig.Client(closesig.DefaultPort)
 	l := logging.New("NEVER", logLevel, "", "json")
