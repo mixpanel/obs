@@ -16,12 +16,12 @@ import (
 )
 
 type MetricsTracker struct {
-	ElapsedMs    uint64
-	ProcessError execution
-	StartTimeNs  int64
+	StartTime time.Time
 
-	client  Client
-	success bool
+	fs       obs.FlightSpan
+	client   Client
+	success  bool
+	warnType string
 }
 
 type execution func(error)
@@ -30,13 +30,19 @@ var traceClientInstance Client
 var traceClientOnce sync.Once
 
 func (qm *MetricsTracker) Init(token string, url string, fs obs.FlightSpan, warnType string) {
-	qm.ProcessError = func(err error) {
-		fs.Warn(warnType, err.Error(), nil)
-	}
-
 	rand.Seed(time.Now().UnixNano())
-	qm.StartTimeNs = time.Now().UnixNano()
+	qm.StartTime = time.Now()
 	qm.initMetrics(token, url)
+	qm.fs = fs
+	qm.warnType = warnType
+}
+
+func (qm *MetricsTracker) ProcessError(msg string, err error) {
+	if err == nil {
+		qm.fs.Warn(qm.warnType, msg, obs.Vals{})
+	} else {
+		qm.fs.Warn(qm.warnType, msg, obs.Vals{}.WithError(err))
+	}
 }
 
 func (qm *MetricsTracker) initMetrics(token string, url string) {
@@ -61,11 +67,11 @@ func (qm *MetricsTracker) TrackQuery(ev *TrackedEvent) {
 		if qm.client != nil {
 			err := qm.client.Track(ev)
 			if err != nil {
-				qm.ProcessError(err)
+				qm.ProcessError("TrackQuery failed", err)
 			}
 		}
 	} else {
-		qm.ProcessError(errors.New("TrackedEvent not created"))
+		qm.ProcessError("TrackEvent creation failed", nil)
 	}
 }
 
@@ -109,6 +115,8 @@ func GenerateStringKVMap(q interface{}, translation map[string]string) map[strin
 			m[fn] = strconv.FormatInt(fv.Interface().(int64), 10)
 		case reflect.Float64:
 			m[fn] = strconv.FormatFloat(fv.Interface().(float64), 'f', -1, 64)
+		case reflect.Bool:
+			m[fn] = strconv.FormatBool(fv.Interface().(bool))
 		default:
 			m[fn] = fv.Interface().(string)
 		}
@@ -151,6 +159,9 @@ func setField(q interface{}, name string, value string) error {
 		val = reflect.ValueOf(n)
 	case reflect.String:
 		val = reflect.ValueOf(value)
+	case reflect.Bool:
+		n, _ := strconv.ParseBool(value)
+		val = reflect.ValueOf(n)
 	default:
 		return errors.New("Provided value type didn't match obj field type")
 	}
