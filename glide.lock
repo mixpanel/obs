@@ -1,5 +1,5 @@
-hash: da760efbc4f6ee975569aa2e72d5faeff94b828856c18a0c6a634a374d5391f0
-updated: 2017-08-29T15:38:40.51608736-07:00
+hash: 8dac74075da728e7d505076191a6f9207bc86b799ad8677bd867300fe801e7c3
+updated: 2017-08-29T15:53:51.518779866-07:00
 imports:
 - name: cloud.google.com/go
   version: 0f0b8420cb699ac4ce059c63bac263f4301fe95b
@@ -105,6 +105,7 @@ imports:
   version: ac87088df8ef557f1e32cd00ed0b6fbc3f7ddafb
   subpackages:
   - cases
+  - internal
   - internal/tag
   - language
   - runes

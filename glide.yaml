@@ -1,7 +1,9 @@
 package: github.com/mixpanel/obs
 import:
 - package: golang.org/x/net
+  ref: master
 - package: golang.org/x/text
+  ref: master
 - package: cloud.google.com/go
   version: ^0.12.0
   subpackages:
