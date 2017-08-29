@@ -2,10 +2,11 @@ package topk
 
 import (
 	"log"
-	"obs/metrics"
-	"obs/mixpanel"
 	"sync"
 	"time"
+
+	"github.com/mixpanel/obs/metrics"
+	"github.com/mixpanel/obs/mixpanel"
 )
 
 const (

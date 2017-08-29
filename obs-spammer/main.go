@@ -3,11 +3,12 @@ package main
 import (
 	"context"
 	"log"
-	"obs"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
+
+	"github.com/mixpanel/obs"
 )
 
 func main() {

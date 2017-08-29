@@ -9,7 +9,8 @@ import (
 	"net"
 	"sync"
 	"time"
-	"util"
+
+	"github.com/mixpanel/obs/util"
 )
 
 type wavefrontSink struct {

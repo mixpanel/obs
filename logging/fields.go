@@ -3,7 +3,8 @@ package logging
 import (
 	"fmt"
 	"os"
-	"util"
+
+	"github.com/mixpanel/obs/util"
 )
 
 type Fields map[string]interface{}

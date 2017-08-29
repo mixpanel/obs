@@ -3,9 +3,10 @@ package obs
 import (
 	"fmt"
 	"io"
-	"obs/tracing"
 	"os"
 	"strings"
+
+	"github.com/mixpanel/obs/tracing"
 
 	"context"
 

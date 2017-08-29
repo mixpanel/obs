@@ -1,0 +1,8 @@
+vendor
+
+*.exe
+*.test
+*.prof
+*.pprof
+*.out
+*.log

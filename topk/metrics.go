@@ -2,8 +2,9 @@ package topk
 
 import (
 	"fmt"
-	"obs/metrics"
 	"sync"
+
+	"github.com/mixpanel/obs/metrics"
 )
 
 const (

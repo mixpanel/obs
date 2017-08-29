@@ -3,10 +3,11 @@ package outlier
 import (
 	"hash"
 	"hash/fnv"
-	"obs"
-	"obs/logging"
-	"obs/metrics"
 	"sync"
+
+	"github.com/mixpanel/obs"
+	"github.com/mixpanel/obs/logging"
+	"github.com/mixpanel/obs/metrics"
 )
 
 type BalanceTracker interface {

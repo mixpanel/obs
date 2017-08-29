@@ -8,7 +8,8 @@ import (
 	"net"
 	"sync"
 	"time"
-	"util"
+
+	"github.com/mixpanel/obs/util"
 )
 
 var batchSizeBytes = 4096

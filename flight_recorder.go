@@ -2,12 +2,12 @@ package obs
 
 import (
 	"fmt"
-	"obs/logging"
-	"obs/metrics"
 	"runtime"
 	"sync"
 	"time"
-	"version"
+
+	"github.com/mixpanel/obs/logging"
+	"github.com/mixpanel/obs/metrics"
 
 	"google.golang.org/grpc"
 
@@ -383,7 +383,8 @@ func (fs *flightSpan) logFields(vals Vals) logging.Fields {
 	fields["eventTime"] = time.Now().Format(time.RFC3339Nano)
 	fields["serviceContext"] = map[string]interface{}{
 		"service": fs.serviceName,
-		"version": version.GitCommit,
+		// TODO: Add Back
+		//"version": version.GitCommit,
 	}
 
 	fields["context"] = getCallerContext(3)

@@ -2,12 +2,12 @@ package topk
 
 import (
 	"net/url"
-	"obs/metrics"
-	"obs/mixpanel"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/mixpanel/obs/metrics"
+	"github.com/mixpanel/obs/mixpanel"
 	"github.com/stretchr/testify/assert"
 )
 

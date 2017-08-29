@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	um "github.com/mixpanel/obs/util/metrics"
 	_metrics "github.com/rcrowley/go-metrics"
 )
 
@@ -76,7 +77,7 @@ func (sink *localSink) handleLocked(metric string, tags Tags, value float64, met
 	case metricTypeStat:
 		stat := sink.stats.Get(formatted)
 		if stat == nil {
-			sample := _metrics.NewTimeWindowSample(4096, 8192, 300*time.Second)
+			sample := um.NewTimeWindowSample(4096, 8192, 300*time.Second)
 			stat = _metrics.NewHistogram(sample)
 			// N.B. defer so that we only register after we've set the value.
 			defer sink.stats.Register(formatted, stat)
@@ -161,7 +162,8 @@ func (sink *localSink) Flush() error {
 				sink.dst.Handle(metricName+".avg", tags, h.Mean(), metricTypeGauge)
 				sink.dst.Handle(metricName+".90percentile", tags, p[1], metricTypeGauge)
 				sink.dst.Handle(metricName+".99percentile", tags, p[2], metricTypeGauge)
-				sink.dst.Handle(metricName+"._dropped", tags, float64(h.Dropped()), metricTypeGauge)
+				// TODO: Add back
+				//sink.dst.Handle(metricName+"._dropped", tags, float64(h.Dropped()), metricTypeGauge)
 			}
 		default:
 			// Ignore all other metrics

@@ -4,12 +4,13 @@ import (
 	"errors"
 	"fmt"
 	"math/rand"
-	"obs"
 	"reflect"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/mixpanel/obs"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"

@@ -2,17 +2,18 @@ package main
 
 import (
 	"context"
-	"obs"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
 
+	"github.com/mixpanel/obs"
+
 	flags "github.com/jessevdk/go-flags"
 
+	meta_v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/pkg/api/v1"
-
 	"k8s.io/client-go/rest"
 )
 
@@ -95,7 +96,7 @@ type reporter struct {
 }
 
 func (r *reporter) report(ctx context.Context) error {
-	pods, err := r.cs.Core().Pods("").List(v1.ListOptions{})
+	pods, err := r.cs.Core().Pods("").List(meta_v1.ListOptions{})
 	if err != nil {
 		return err
 	}

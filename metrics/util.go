@@ -27,7 +27,7 @@ func formatName(prefix string, name string) string {
 // used as a map key
 func FormatTags(tags Tags) string {
 	keys := make([]string, 0, len(tags))
-	for key, _ := range tags {
+	for key := range tags {
 		keys = append(keys, key)
 	}
 	sort.Strings(keys)

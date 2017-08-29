@@ -2,14 +2,14 @@ package obs
 
 import (
 	"fmt"
-	"obs/closesig"
-	"obs/logging"
-	"obs/metrics"
-	"obs/tracing"
 	"path"
 	"syscall"
 	"time"
-	"version"
+
+	"github.com/mixpanel/obs/closesig"
+	"github.com/mixpanel/obs/logging"
+	"github.com/mixpanel/obs/metrics"
+	"github.com/mixpanel/obs/tracing"
 
 	basictracer "github.com/opentracing/basictracer-go"
 	opentracing "github.com/opentracing/opentracing-go"
@@ -112,7 +112,8 @@ func reportVersion(done <-chan struct{}, receiver metrics.Receiver) {
 			case <-done:
 				return
 			case <-next:
-				receiver.SetGauge("git_version", float64(version.Int()))
+				// TODO: Add back
+				//receiver.SetGauge("git_version", float64(version.Int()))
 				next = time.After(60 * time.Second)
 			}
 		}
@@ -148,8 +149,8 @@ func reportRusage(done <-chan struct{}, receiver metrics.Receiver) {
 				var rusage syscall.Rusage
 				err := syscall.Getrusage(syscall.RUSAGE_SELF, &rusage)
 				if err == nil {
-					receiver.SetGauge("user_us", float64(rusage.Utime.Sec*1e6+rusage.Utime.Usec))
-					receiver.SetGauge("system_us", float64(rusage.Stime.Sec*1e6+rusage.Stime.Usec))
+					receiver.SetGauge("user_us", float64(rusage.Utime.Sec*1e6+int64(rusage.Utime.Usec)))
+					receiver.SetGauge("system_us", float64(rusage.Stime.Sec*1e6+int64(rusage.Stime.Usec)))
 					receiver.SetGauge("voluntary_cs", float64(rusage.Nvcsw))
 					receiver.SetGauge("involuntary_cs", float64(rusage.Nivcsw))
 				}
