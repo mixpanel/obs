@@ -6,6 +6,10 @@ import (
 	"time"
 )
 
+// Receiver is the interface to metrics
+// that handles things like counters and gauges.
+// An implementation of this receiver can be passed
+// to flight recorder to track metrics
 type Receiver interface {
 	Incr(name string)
 	IncrBy(name string, amount float64)
@@ -30,6 +34,7 @@ type receiver struct {
 	sink Sink
 }
 
+// Null is the no op receiver
 var Null Receiver = &receiver{
 	scopes: make(map[string]*receiver),
 	sink:   NullSink,
@@ -119,6 +124,8 @@ func (r *receiver) StartStopwatch(name string) Stopwatch {
 	}
 }
 
+// NewReceiver returns an implementation
+// of the receiver with the specified sink
 func NewReceiver(sink Sink) Receiver {
 	return &receiver{
 		prefix: "",

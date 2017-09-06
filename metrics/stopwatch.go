@@ -2,6 +2,8 @@ package metrics
 
 import "time"
 
+// Stopwatch is used for measuring
+// time spent in an operation
 type Stopwatch interface {
 	Stop()
 }

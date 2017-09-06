@@ -7,6 +7,7 @@ import (
 	"github.com/mixpanel/obs/util"
 )
 
+// Fields are used to add additional context to your log message
 type Fields map[string]interface{}
 
 var localhostFields Fields
@@ -27,6 +28,7 @@ func MergeFields(a, b Fields) Fields {
 	return merged
 }
 
+// Dupe makes a copy of the fields
 func (fields Fields) Dupe() Fields {
 	dupe := make(Fields, len(fields))
 	for k, v := range fields {
@@ -35,6 +37,9 @@ func (fields Fields) Dupe() Fields {
 	return dupe
 }
 
+// WithError is used to add the full error
+// string to the context. This is useful
+// especially with the obserr package
 func (fields Fields) WithError(err error) Fields {
 	res := fields.Dupe()
 	res["error_message"] = fmt.Sprintf("%v", err)

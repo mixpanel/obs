@@ -54,7 +54,7 @@ func (sink *statsdSink) Handle(metric string, tags Tags, value float64, metricTy
 			_, _ = buf.WriteString(k)
 			_, _ = buf.WriteString(":")
 			_, _ = buf.WriteString(v)
-			numTags -= 1
+			numTags--
 			if numTags > 0 {
 				_, _ = buf.WriteString(",")
 			}
@@ -150,6 +150,8 @@ func newStatsdSinkFromConn(conn net.Conn) (Sink, error) {
 	return sink, nil
 }
 
+// NewStatsdSink returns a Sink for statsd
+// pass the address of the statsd daemon to it
 func NewStatsdSink(addr string) (Sink, error) {
 	if addr == "" {
 		return &nullSink{}, nil

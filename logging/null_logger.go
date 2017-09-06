@@ -1,5 +1,6 @@
 package logging
 
+// Null is the null implementation of logger.
 var Null Logger = nullLogger(struct{}{})
 
 type nullLogger struct{}

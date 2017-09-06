@@ -17,6 +17,12 @@ type metricKey struct {
 	name       string
 }
 
+// PerMetricCumulativeHistogramBounds is used to specify for which metrics cumulative histogram
+// counters should be reported, and what bucket boundaries to use. For example, if it contains an entry
+// {"foo", {1, 10, 100}}, for any metricTypeStat metric named *foo, four additional counters will be
+// created, with suffixes ".less_than.{1,10,100,inf}" appended to the original metric name, representing
+// the number of observations with observed values less than 1, 10, 100, and infinity, respectively. If
+// multiple entries match a given metric, the first match will be used.
 type PerMetricCumulativeHistogramBounds []struct {
 	Suffix string
 	Bounds []int64
@@ -87,7 +93,7 @@ func (sink *localSink) handleLocked(metric string, tags Tags, value float64, met
 			if !strings.HasSuffix(metric, pair.Suffix) {
 				continue
 			}
-			for idx := len(pair.Bounds) - 1; idx >= 0; idx -= 1 {
+			for idx := len(pair.Bounds) - 1; idx >= 0; idx-- {
 				bound := pair.Bounds[idx]
 				counterName := fmt.Sprintf("%s.less_than.%d", metric, bound)
 				if value < float64(bound) {
@@ -100,7 +106,7 @@ func (sink *localSink) handleLocked(metric string, tags Tags, value float64, met
 			break
 		}
 	default:
-		return errors.New(fmt.Sprintf("unknown metric type: %s", metricType))
+		return fmt.Errorf("unknown metric type: %s", metricType)
 	}
 	return nil
 }
@@ -185,12 +191,9 @@ func (sink *localSink) Close() {
 	sink.stats.UnregisterAll()
 }
 
-// perMetricCumulativeHistogramBounds is used to specify for which metrics cumulative histogram
-// counters should be reported, and what bucket boundaries to use. For example, if it contains an entry
-// {"foo", {1, 10, 100}}, for any metricTypeStat metric named *foo, four additional counters will be
-// created, with suffixes ".less_than.{1,10,100,inf}" appended to the original metric name, representing
-// the number of observations with observed values less than 1, 10, 100, and infinity, respectively. If
-// multiple entries match a given metric, the first match will be used.
+// NewLocalSink returns an implementation of sink. Pass in the destination
+// sink like statsd, and perMetricCumulativeHistogramBounds to add histogram
+// metrics
 func NewLocalSink(dst Sink, flushThreshold int, perMetricCumulativeHistogramBounds PerMetricCumulativeHistogramBounds) Sink {
 	return &localSink{
 		counters: _metrics.NewRegistry(),
