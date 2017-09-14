@@ -7,6 +7,10 @@ import (
 )
 
 type metricType string
+
+// Tags are additional metadata with the metric
+// name, keep in mind that these can't be
+// high cardinality
 type Tags map[string]string
 
 const (
@@ -23,7 +27,7 @@ func formatName(prefix string, name string) string {
 	return formatted + name
 }
 
-// used by receivers and sinks to convert a map of tags into a string that can be
+// FormatTags is used by receivers and sinks to convert a map of tags into a string that can be
 // used as a map key
 func FormatTags(tags Tags) string {
 	keys := make([]string, 0, len(tags))
@@ -41,7 +45,7 @@ func FormatTags(tags Tags) string {
 	return formatted
 }
 
-// converts a string formatted using formatTags(see above) into a map of tags
+// ParseTags converts a string formatted using formatTags(see above) into a map of tags
 func ParseTags(tagString string) (map[string]string, error) {
 	split := strings.Split(tagString, ",")
 	tags := make(map[string]string, len(split))

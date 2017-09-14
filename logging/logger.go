@@ -9,6 +9,10 @@ import (
 	"os"
 )
 
+// Logger is the interface to logging
+// It is simlar to standard logger but
+// supports fields. An implementation of logger
+// can be used by flight recorder for the logging.
 type Logger interface {
 	Debug(message string, fields Fields)
 	Info(message string, fields Fields)

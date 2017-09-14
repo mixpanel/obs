@@ -30,13 +30,13 @@ func testWavefrontSinkWithoutTags(sink Sink, endpoint *tcpEndpoint, t *testing.T
 }
 
 func TestWavefrontSinkWithoutTags(t *testing.T) {
-	endpoint := newTcpEndpoint()
+	endpoint := newTCPEndpoint()
 	sink := newSink(endpoint.address)
 	testWavefrontSinkWithoutTags(sink, endpoint, t)
 }
 
 func TestWavefrontSinkWithTags(t *testing.T) {
-	endpoint := newTcpEndpoint()
+	endpoint := newTCPEndpoint()
 	endpoint.wg.Add(1)
 	go newServer(endpoint)
 
@@ -75,7 +75,7 @@ func TestWavefrontSinkWithTags(t *testing.T) {
 
 func TestWavefrontSinkRetrySuccess(t *testing.T) {
 	rand.Seed(1)
-	endpoint := newTcpEndpoint()
+	endpoint := newTCPEndpoint()
 	addresses := make([]string, 10)
 	for i := 0; i < 10; i++ {
 		addresses[i] = fmt.Sprintf("127.0.0.1:%d", i+1)
@@ -118,7 +118,7 @@ func newSink(address string) Sink {
 	return NewWavefrontSink("localhost", nil, []string{address})
 }
 
-func newTcpEndpoint() *tcpEndpoint {
+func newTCPEndpoint() *tcpEndpoint {
 	addr, err := net.ResolveTCPAddr("tcp", "127.0.0.1:0")
 	if err != nil {
 		panic(err)
