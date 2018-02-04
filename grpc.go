@@ -10,7 +10,7 @@ import (
 
 	"context"
 
-	"github.com/opentracing/opentracing-go"
+	opentracing "github.com/opentracing/opentracing-go"
 	"github.com/opentracing/opentracing-go/ext"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
@@ -31,12 +31,13 @@ func tracingUnaryClientInterceptor(fr FlightRecorder, tracer opentracing.Tracer)
 		invoker grpc.UnaryInvoker,
 		opts ...grpc.CallOption,
 	) error {
-		fs, ctx, done := fr.WithNewSpan(ctx, formatRPCName(method))
+		obsName := formatRPCName(method)
+		fs, ctx, done := fr.WithNewSpan(ctx, obsName)
 		defer done()
 		span := fs.TraceSpan()
 		ext.SpanKind.Set(span, ext.SpanKindRPCClientEnum)
 
-		md, ok := metadata.FromContext(ctx)
+		md, ok := metadata.FromOutgoingContext(ctx)
 		if !ok {
 			md = metadata.New(nil)
 		} else {
@@ -47,9 +48,11 @@ func tracingUnaryClientInterceptor(fr FlightRecorder, tracer opentracing.Tracer)
 			fs.Warn("tracer_inject", "error injecting trace metadata", Vals{}.WithError(err))
 		}
 
-		ctx = metadata.NewContext(ctx, md)
+		ctx = metadata.NewOutgoingContext(ctx, md)
 
-		if err := invoker(ctx, method, req, reply, cc, opts...); err != nil {
+		err := invoker(ctx, method, req, reply, cc, opts...)
+		fs.Incr(fmt.Sprintf("grpc_client.%s.%s", obsName, grpc.Code(err).String()))
+		if err != nil {
 			if ctx.Err() == nil {
 				fs.Trace(fmt.Sprintf("error in gRPC %s", method), Vals{}.WithError(err))
 				ext.Error.Set(span, true)
@@ -77,7 +80,7 @@ func tracingStreamClientInterceptor(fr FlightRecorder, tracer opentracing.Tracer
 		span := fs.TraceSpan()
 		ext.SpanKind.Set(span, ext.SpanKindRPCClientEnum)
 
-		md, ok := metadata.FromContext(ctx)
+		md, ok := metadata.FromOutgoingContext(ctx)
 		if !ok {
 			md = metadata.New(nil)
 		} else {
@@ -88,9 +91,12 @@ func tracingStreamClientInterceptor(fr FlightRecorder, tracer opentracing.Tracer
 			fs.Warn("tracer_inject", "error injecting trace metadata", Vals{}.WithError(err))
 		}
 
-		ctx = metadata.NewContext(ctx, md)
+		ctx = metadata.NewOutgoingContext(ctx, md)
 
 		cs, err := streamer(ctx, desc, cc, method, opts...)
+
+		fs.Incr(fmt.Sprintf("grpc_client.%s.%s", obsName, grpc.Code(err).String()))
+
 		if err != nil {
 			if ctx.Err() == nil {
 				fs.Trace(fmt.Sprintf("error in gRPC %s", method), Vals{}.WithError(err))
@@ -100,7 +106,7 @@ func tracingStreamClientInterceptor(fr FlightRecorder, tracer opentracing.Tracer
 			}
 		}
 
-		return &clientStreamInterceptor{cs, fr.ScopeName(obsName).WithSpan(ctx), span, done, 0, 0}, err
+		return &clientStreamInterceptor{cs, span, done, 0, 0}, err
 	}
 }
 
@@ -111,13 +117,15 @@ func tracingUnaryServerInterceptor(fr FlightRecorder, tracer opentracing.Tracer)
 		info *grpc.UnaryServerInfo,
 		handler grpc.UnaryHandler,
 	) (resp interface{}, err error) {
-		md, ok := metadata.FromContext(ctx)
+		obsName := formatRPCName(info.FullMethod)
+		md, ok := metadata.FromIncomingContext(ctx)
 		if !ok {
 			md = metadata.New(nil)
 		}
+
 		spanCtx, err := tracer.Extract(opentracing.TextMap, grpcTraceMD(md))
 
-		fs, ctx, done := fr.WithNewSpanContext(ctx, formatRPCName(info.FullMethod), spanCtx)
+		fs, ctx, done := fr.WithNewSpanContext(ctx, obsName, spanCtx)
 		defer done()
 		span := fs.TraceSpan()
 		ext.SpanKind.Set(span, ext.SpanKindRPCServerEnum)
@@ -129,6 +137,9 @@ func tracingUnaryServerInterceptor(fr FlightRecorder, tracer opentracing.Tracer)
 
 		ctx = opentracing.ContextWithSpan(ctx, span)
 		resp, err = handler(ctx, req)
+
+		fs.Incr(fmt.Sprintf("grpc_server.%s.%s", obsName, grpc.Code(err).String()))
+
 		if err != nil {
 			if ctx.Err() == nil {
 				fs.Trace(fmt.Sprintf("error in gRPC %s", info.FullMethod), Vals{}.WithError(err))
@@ -151,7 +162,7 @@ func tracingStreamServerInterceptor(fr FlightRecorder, tracer opentracing.Tracer
 		handler grpc.StreamHandler,
 	) error {
 		ctx := ss.Context()
-		md, ok := metadata.FromContext(ctx)
+		md, ok := metadata.FromIncomingContext(ctx)
 		if !ok {
 			md = metadata.New(nil)
 		}
@@ -168,9 +179,12 @@ func tracingStreamServerInterceptor(fr FlightRecorder, tracer opentracing.Tracer
 		}
 
 		ctx = opentracing.ContextWithSpan(ctx, span)
-		ssi := &serverStreamInterceptor{ss, fr.ScopeName(obsName).WithSpan(ctx), span, done, 0, 0, ctx}
+		ssi := &serverStreamInterceptor{ss, span, done, 0, 0, ctx}
 		defer ssi.finish()
-		if err := handler(srv, ssi); err != nil {
+
+		err = handler(srv, ssi)
+		fs.Incr(fmt.Sprintf("grpc_server.%s.%s", obsName, grpc.Code(err).String()))
+		if err != nil {
 			if ctx.Err() == nil {
 				fs.Trace(fmt.Sprintf("error in gRPC %s", info.FullMethod), Vals{}.WithError(err))
 				ext.Error.Set(span, true)
@@ -186,7 +200,6 @@ func tracingStreamServerInterceptor(fr FlightRecorder, tracer opentracing.Tracer
 
 type clientStreamInterceptor struct {
 	cs                grpc.ClientStream
-	fs                FlightSpan
 	span              opentracing.Span
 	done              func()
 	inCount, outCount int
@@ -209,7 +222,6 @@ func (csi *clientStreamInterceptor) Context() context.Context {
 }
 
 func (csi *clientStreamInterceptor) SendMsg(m interface{}) error {
-	csi.fs.Incr("stream_sent")
 	csi.outCount++
 	return csi.cs.SendMsg(m)
 }
@@ -223,7 +235,6 @@ func (csi *clientStreamInterceptor) RecvMsg(m interface{}) error {
 		return err
 	}
 
-	csi.fs.Incr("stream_received")
 	csi.inCount++
 
 	return err
@@ -231,7 +242,6 @@ func (csi *clientStreamInterceptor) RecvMsg(m interface{}) error {
 
 type serverStreamInterceptor struct {
 	ss                grpc.ServerStream
-	fs                FlightSpan
 	span              opentracing.Span
 	done              func()
 	inCount, outCount int
@@ -255,13 +265,11 @@ func (ssi *serverStreamInterceptor) Context() context.Context {
 }
 
 func (ssi *serverStreamInterceptor) SendMsg(m interface{}) error {
-	ssi.fs.Incr("stream_sent")
 	ssi.outCount++
 	return ssi.ss.SendMsg(m)
 }
 
 func (ssi *serverStreamInterceptor) RecvMsg(m interface{}) error {
-	ssi.fs.Incr("stream_received")
 	ssi.inCount++
 	return ssi.ss.RecvMsg(m)
 }
