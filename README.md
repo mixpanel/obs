@@ -1,4 +1,4 @@
-# obs
+# obs [![GoDoc][doc-img]][doc] [![Build Status][ci-img]][ci]
 Fast and buffered stats, logging and tracing in Go.
 
 ## Installation
@@ -29,3 +29,10 @@ fs := fr.WithSpan(ctx)
 fs.Info("my info log")
 fs.Incr("my.counter")
 ```
+<hr/>
+Released under the [MIT License](LICENSE).
+
+[doc-img]: https://godoc.org/github.com/mixpanel/obs?status.svg
+[doc]: https://godoc.org/github.com/mixpanel/obs
+[ci-img]: https://api.travis-ci.org/mixpanel/obs.svg?branch=master
+[ci]: https://travis-ci.org/mixpanel/obs
