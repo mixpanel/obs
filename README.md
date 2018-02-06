@@ -29,8 +29,6 @@ fs := fr.WithSpan(ctx)
 fs.Info("my info log")
 fs.Incr("my.counter")
 ```
-<hr/>
-Released under the [MIT License](LICENSE).
 
 [doc-img]: https://godoc.org/github.com/mixpanel/obs?status.svg
 [doc]: https://godoc.org/github.com/mixpanel/obs
