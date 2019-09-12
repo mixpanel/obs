@@ -1,6 +1,7 @@
 package outlier
 
 import (
+	"fmt"
 	"hash"
 	"hash/fnv"
 	"sync"
@@ -132,6 +133,7 @@ func (t *balanceTracker) sample() {
 				imbalanced[k] = struct{}{}
 				numImbalanced++
 
+				t.receiver.Incr(fmt.Sprintf("imbalanced.%d", k))
 				obs.Log.Warn("imbalanced tracks for key", logging.Fields{
 					"key":        k,
 					"num_tracks": v.count,

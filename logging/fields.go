@@ -1,11 +1,14 @@
 package logging
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"fmt"
 	"os"
+
+	"github.com/mixpanel/obs/util"
 )
 
-// Fields are used to add additional context to your log message
 type Fields map[string]interface{}
 
 var localhostFields Fields
@@ -26,7 +29,6 @@ func MergeFields(a, b Fields) Fields {
 	return merged
 }
 
-// Dupe makes a copy of the fields
 func (fields Fields) Dupe() Fields {
 	dupe := make(Fields, len(fields))
 	for k, v := range fields {
@@ -35,9 +37,6 @@ func (fields Fields) Dupe() Fields {
 	return dupe
 }
 
-// WithError is used to add the full error
-// string to the context. This is useful
-// especially with the obserr package
 func (fields Fields) WithError(err error) Fields {
 	res := fields.Dupe()
 	res["error_message"] = fmt.Sprintf("%v", err)
@@ -49,13 +48,23 @@ func getLocalhostFields() Fields {
 	fields["pid"] = os.Getpid()
 	fields["executable"] = os.Args[0]
 	fields["argv"] = os.Args
-
+	// Generate 4 bytes of random id since os.Pid() will frequently return the same value inside containers and thus unsuitable to detect restarts
+	obsId := []byte{0, 0, 0, 0}
+	_, _ = rand.Read(obsId)
+	fields["obsid"] = hex.EncodeToString(obsId)
 	localhost, err := os.Hostname()
 	if err != nil {
 		initError(fmt.Sprintf("Unable to lookup localhost hostname.\n"))
 		return fields
 	}
-	fields["hostname"] = localhost
+	hostInfo := util.GetHostInfo(localhost)
+	if hostInfo == nil {
+		initError(fmt.Sprintf("Unable to extract host info from %v.\n", localhost))
+		return fields
+	}
 
+	for k, v := range hostInfo.Map() {
+		fields[k] = v
+	}
 	return fields
 }

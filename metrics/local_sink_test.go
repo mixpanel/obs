@@ -7,13 +7,18 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/jonboulle/clockwork"
 	"github.com/stretchr/testify/assert"
+)
+
+const (
+	numSelfStats = 5
 )
 
 var (
 	perMetricCumulativeHistogramBounds = PerMetricCumulativeHistogramBounds{
 		{
-			"scope.latency_us",
+			"arb.distributed_query_server.latency_us",
 			[]int64{
 				250 * 1000,
 				500 * 1000,
@@ -27,8 +32,30 @@ var (
 	}
 )
 
+type testSink struct {
+	stats []string
+}
+
+func newLocalTestSink() (Sink, *testSink) {
+	dst := &testSink{}
+	local := NewLocalSink(dst, 1e18, perMetricCumulativeHistogramBounds, "statsd.local_sink", clockwork.NewFakeClock())
+	return local, dst
+}
+
+func (sink *testSink) Handle(metric string, tags Tags, value float64, metricType metricType) error {
+	sink.stats = append(sink.stats, formatMetric(metric, tags, value, metricType))
+	return nil
+}
+
+func (sink *testSink) Flush() error { return nil }
+func (sink *testSink) Close()       {}
+
+func formatMetric(metric string, tags Tags, value float64, metricType metricType) string {
+	return fmt.Sprintf("%s %s %g %s", metric, FormatTags(tags), value, metricType)
+}
+
 func BenchmarkLocalSinkCounters(b *testing.B) {
-	sink := NewLocalSink(NullSink, 1e18, nil)
+	sink := NewLocalSink(NullSink, 1e18, nil, "statsd.local_sink", clockwork.NewFakeClock())
 	for i := 0; i < b.N; i++ {
 		sink.Handle(fmt.Sprintf("metric_%d", rand.Intn(10)), Tags{
 			"a": "A",
@@ -38,7 +65,7 @@ func BenchmarkLocalSinkCounters(b *testing.B) {
 }
 
 func BenchmarkLocalSinkStats(b *testing.B) {
-	sink := NewLocalSink(NullSink, 1e18, nil)
+	sink := NewLocalSink(NullSink, 1e18, nil, "statsd.local_sink", clockwork.NewFakeClock())
 	for i := 0; i < b.N; i++ {
 		sink.Handle(fmt.Sprintf("metric_%d", rand.Intn(10)), Tags{
 			"a": "A",
@@ -48,7 +75,7 @@ func BenchmarkLocalSinkStats(b *testing.B) {
 }
 
 func BenchmarkLocalSinkFlush(b *testing.B) {
-	sink := NewLocalSink(NullSink, 1e18, nil)
+	sink := NewLocalSink(NullSink, 1e18, nil, "statsd.local_sink", clockwork.NewFakeClock())
 
 	for i := 0; i < 1000; i++ {
 		sink.Handle(fmt.Sprintf("counter_%d", i), nil, 1.0, "ct")
@@ -66,32 +93,31 @@ func TestLocalSinkCounter(t *testing.T) {
 	local.Handle("test", nil, 1, metricTypeCounter)
 	local.Flush()
 
-	assert.Equal(t, 1, len(test.stats))
+	assert.Equal(t, 1+numSelfStats, len(test.stats))
 	assert.Equal(t, formatMetric("test", nil, 2, metricTypeGauge), test.stats[0])
 }
 
 func TestLocalSinkCounterWithFlushThreshold(t *testing.T) {
 	test := &testSink{}
-	local := NewLocalSink(test, 1, nil)
+	local := NewLocalSink(test, 1, nil, "statsd.local_sink", clockwork.NewFakeClock())
 
 	local.Handle("test", nil, 1, metricTypeCounter)
 
 	local.Flush()
 
 	// The second flush should be a no-op because the value hasn't changed
-	assert.Equal(t, 1, len(test.stats))
+	assert.Equal(t, 1+numSelfStats, len(test.stats))
 	assert.Equal(t, formatMetric("test", nil, 1, metricTypeGauge), test.stats[0])
 
 	local.Flush()
 	// The second flush should be a no-op because the value hasn't changed
-	assert.Equal(t, 1, len(test.stats))
-	assert.Equal(t, formatMetric("test", nil, 1, metricTypeGauge), test.stats[0])
+	assert.Equal(t, 1+2*numSelfStats, len(test.stats))
 
 	local.Handle("test", nil, 1, metricTypeCounter)
 	local.Flush()
 
-	assert.Equal(t, 2, len(test.stats))
-	assert.Equal(t, formatMetric("test", nil, 2, metricTypeGauge), test.stats[1])
+	assert.Equal(t, 2+3*numSelfStats, len(test.stats))
+	assert.Equal(t, formatMetric("test", nil, 2, metricTypeGauge), test.stats[11])
 }
 
 func TestLocalSinkCounterWithTags(t *testing.T) {
@@ -106,7 +132,7 @@ func TestLocalSinkCounterWithTags(t *testing.T) {
 		formatMetric("test", Tags{"a": "c"}, 1, metricTypeGauge): true,
 	}
 
-	assert.Equal(t, 2, len(test.stats))
+	assert.Equal(t, 2+numSelfStats, len(test.stats))
 	assert.Equal(t, true, mp[test.stats[0]])
 	assert.Equal(t, true, mp[test.stats[1]])
 	assert.NotEqual(t, test.stats[0], test.stats[1])
@@ -118,14 +144,14 @@ func TestLocalSinkGauge(t *testing.T) {
 	local.Handle("test", nil, 2, metricTypeGauge)
 	local.Flush()
 
-	assert.Equal(t, 1, len(test.stats))
+	assert.Equal(t, 1+numSelfStats, len(test.stats))
 	assert.Equal(t, formatMetric("test", nil, 2, metricTypeGauge), test.stats[0])
 
 	local.Handle("test", nil, 3, metricTypeGauge)
 	local.Flush()
 
-	assert.Equal(t, 2, len(test.stats))
-	assert.Equal(t, formatMetric("test", nil, 3, metricTypeGauge), test.stats[1])
+	assert.Equal(t, 2+2*numSelfStats, len(test.stats))
+	assert.Equal(t, formatMetric("test", nil, 3, metricTypeGauge), test.stats[6])
 }
 
 func TestLocalSinkGaugeWithTags(t *testing.T) {
@@ -139,7 +165,7 @@ func TestLocalSinkGaugeWithTags(t *testing.T) {
 		formatMetric("test", Tags{"a": "c"}, 2, metricTypeGauge): true,
 	}
 
-	assert.Equal(t, 2, len(test.stats))
+	assert.Equal(t, 2+numSelfStats, len(test.stats))
 	assert.Equal(t, true, mp[test.stats[0]])
 	assert.Equal(t, true, mp[test.stats[1]])
 	assert.NotEqual(t, test.stats[0], test.stats[1])
@@ -153,70 +179,50 @@ func unpackFlushed(s string) (string, float64, string) {
 }
 
 func TestLocalSinkStat(t *testing.T) {
-	local, test := newLocalTestSink()
-	for i := 1; i <= 100; i++ {
-		local.Handle("test", nil, float64(i), metricTypeStat)
+	for _, tags := range []Tags{nil, Tags{"a": "b"}} {
+		local, test := newLocalTestSink()
+		for i := 1; i <= 100; i++ {
+			local.Handle("test", tags, float64(i), metricTypeStat)
+		}
+		local.Flush()
+
+		mp := map[string]bool{
+			formatMetric("test.count", tags, 100, metricTypeGauge):                        true,
+			formatMetric("test.avg", tags, 50, metricTypeGauge):                           true,
+			formatMetric("test.max", tags, 100, metricTypeGauge):                          true,
+			formatMetric("test.min", tags, 1, metricTypeGauge):                            true,
+			formatMetric("test.median", tags, 50, metricTypeGauge):                        true,
+			formatMetric("test.90percentile", tags, 90, metricTypeGauge):                  true,
+			formatMetric("test.99percentile", tags, 99, metricTypeGauge):                  true,
+			formatMetric("statsd.local_sink.handled", tags, 100, metricTypeGauge):         true,
+			formatMetric("statsd.local_sink.flushed", tags, 8, metricTypeGauge):           true,
+			formatMetric("statsd.local_sink.counters.active", tags, 0, metricTypeGauge):   true,
+			formatMetric("statsd.local_sink.gauges.active", tags, 0, metricTypeGauge):     true,
+			formatMetric("statsd.local_sink.histograms.active", tags, 1, metricTypeGauge): true,
+		}
+
+		mpStats := make(map[string]bool)
+
+		for _, s := range test.stats {
+			name, value, mt := unpackFlushed(s)
+			mpStats[formatMetric(name, tags, float64(math.Floor(value)), metricType(mt))] = true
+		}
+
+		assert.Equal(t, mp, mpStats)
 	}
-	local.Flush()
-
-	mp := map[string]bool{
-		formatMetric("test.count", nil, 100, metricTypeGauge):       true,
-		formatMetric("test.avg", nil, 50, metricTypeGauge):          true,
-		formatMetric("test.max", nil, 100, metricTypeGauge):         true,
-		formatMetric("test.min", nil, 1, metricTypeGauge):           true,
-		formatMetric("test.median", nil, 50, metricTypeGauge):       true,
-		formatMetric("test.90percentile", nil, 90, metricTypeGauge): true,
-		formatMetric("test.99percentile", nil, 99, metricTypeGauge): true,
-	}
-
-	mpStats := make(map[string]bool)
-
-	for _, s := range test.stats {
-		name, value, mt := unpackFlushed(s)
-		mpStats[formatMetric(name, nil, float64(math.Floor(value)), metricType(mt))] = true
-	}
-
-	assert.Equal(t, mp, mpStats)
-}
-
-func TestLocalSinkStatWithTags(t *testing.T) {
-	local, test := newLocalTestSink()
-	for i := 1; i <= 100; i++ {
-		local.Handle("test", Tags{"a": "b"}, float64(i), metricTypeStat)
-	}
-	local.Flush()
-
-	mp := map[string]bool{
-		formatMetric("test.count", Tags{"a": "b"}, 100, metricTypeGauge):       true,
-		formatMetric("test.avg", Tags{"a": "b"}, 50, metricTypeGauge):          true,
-		formatMetric("test.max", Tags{"a": "b"}, 100, metricTypeGauge):         true,
-		formatMetric("test.min", Tags{"a": "b"}, 1, metricTypeGauge):           true,
-		formatMetric("test.median", Tags{"a": "b"}, 50, metricTypeGauge):       true,
-		formatMetric("test.90percentile", Tags{"a": "b"}, 90, metricTypeGauge): true,
-		formatMetric("test.99percentile", Tags{"a": "b"}, 99, metricTypeGauge): true,
-	}
-
-	mpStats := make(map[string]bool)
-
-	for _, s := range test.stats {
-		name, value, mt := unpackFlushed(s)
-		mpStats[formatMetric(name, Tags{"a": "b"}, float64(math.Floor(value)), metricType(mt))] = true
-	}
-
-	assert.Equal(t, mp, mpStats)
 }
 
 func TestLocalSinkCumulativeFrequency(t *testing.T) {
 	local, test := newLocalTestSink()
 	for i := 100000; i <= 100000000; i *= 2 {
 		// Cumulative frequency counters should be created for this metric.
-		local.Handle("scope.latency_us", Tags{"a": "b"}, float64(i), metricTypeStat)
+		local.Handle("arb.distributed_query_server.latency_us", Tags{"a": "b"}, float64(i), metricTypeStat)
 		// No cumulative frequency counters should be created for this metrics.
 		local.Handle("foo", Tags{"a": "b"}, float64(i), metricTypeStat)
 	}
 	local.Flush()
 
-	metric := "scope.latency_us"
+	metric := "arb.distributed_query_server.latency_us"
 	expected := map[string]bool{
 		formatMetric(metric+".less_than.250000", Tags{"a": "b"}, 2, metricTypeGauge):    true,
 		formatMetric(metric+".less_than.500000", Tags{"a": "b"}, 3, metricTypeGauge):    true,
@@ -255,24 +261,13 @@ func TestLocalSinkCumulativeFrequency(t *testing.T) {
 	}
 }
 
-func newLocalTestSink() (Sink, *testSink) {
-	dst := &testSink{}
-	local := NewLocalSink(dst, 1e18, perMetricCumulativeHistogramBounds)
-	return local, dst
+func TestLocalSinkHandleFlushRace(t *testing.T) {
+	sink := NewLocalSink(NullSink, 1e18, nil, "statsd.local_sink", clockwork.NewFakeClock())
+	for i := 0; i < 1000; i++ {
+		go sink.Handle(fmt.Sprintf("metric_%d", rand.Intn(10)), Tags{
+			"a": "A",
+			"b": "B",
+		}, rand.Float64(), "h")
+		go sink.Flush()
+	}
 }
-
-type testSink struct {
-	stats []string
-}
-
-func formatMetric(metric string, tags Tags, value float64, metricType metricType) string {
-	return fmt.Sprintf("%s %s %g %s", metric, FormatTags(tags), value, metricType)
-}
-
-func (sink *testSink) Handle(metric string, tags Tags, value float64, metricType metricType) error {
-	sink.stats = append(sink.stats, formatMetric(metric, tags, value, metricType))
-	return nil
-}
-
-func (sink *testSink) Flush() error { return nil }
-func (sink *testSink) Close()       {}

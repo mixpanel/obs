@@ -10,13 +10,13 @@ import (
 
 	"context"
 
-	opentracing "github.com/opentracing/opentracing-go"
+	"github.com/opentracing/opentracing-go"
 	"github.com/opentracing/opentracing-go/ext"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
 )
 
-var traceHostname string
+var traceHostname, podRole string
 
 func init() {
 	traceHostname, _ = os.Hostname()
@@ -110,7 +110,7 @@ func tracingStreamClientInterceptor(fr FlightRecorder, tracer opentracing.Tracer
 	}
 }
 
-func tracingUnaryServerInterceptor(fr FlightRecorder, tracer opentracing.Tracer) grpc.UnaryServerInterceptor {
+func TracingUnaryServerInterceptor(fr FlightRecorder, tracer opentracing.Tracer) grpc.UnaryServerInterceptor {
 	return func(
 		ctx context.Context,
 		req interface{},
@@ -124,7 +124,6 @@ func tracingUnaryServerInterceptor(fr FlightRecorder, tracer opentracing.Tracer)
 		}
 
 		spanCtx, err := tracer.Extract(opentracing.TextMap, grpcTraceMD(md))
-
 		fs, ctx, done := fr.WithNewSpanContext(ctx, obsName, spanCtx)
 		defer done()
 		span := fs.TraceSpan()
@@ -166,8 +165,8 @@ func tracingStreamServerInterceptor(fr FlightRecorder, tracer opentracing.Tracer
 		if !ok {
 			md = metadata.New(nil)
 		}
-		spanCtx, err := tracer.Extract(opentracing.TextMap, grpcTraceMD(md))
 
+		spanCtx, err := tracer.Extract(opentracing.TextMap, grpcTraceMD(md))
 		obsName := formatRPCName(info.FullMethod)
 		fs, ctx, done := fr.WithNewSpanContext(ctx, obsName, spanCtx)
 		span := fs.TraceSpan()
@@ -304,7 +303,7 @@ func (g grpcTraceMD) ForeachKey(handler func(key, val string) error) error {
 
 // formatRPCName takes the name as GRPC formats it (/<Namespace>.<ServiceName>/<RPCName>)
 // and turns it into <ServiceName>.<RPCName>
-// For example: /rompany.Service/Method -> Service.Method
+// For example: /mixpanel.arb.pb.StorageServer/Tail -> StorageServer.Tail
 func formatRPCName(name string) string {
 	parts := strings.Split(strings.TrimPrefix(name, "/"), "/")
 	if len(parts) != 2 {

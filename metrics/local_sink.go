@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/jonboulle/clockwork"
 	um "github.com/mixpanel/obs/util/metrics"
 	_metrics "github.com/rcrowley/go-metrics"
 )
@@ -17,15 +18,13 @@ type metricKey struct {
 	name       string
 }
 
-// PerMetricCumulativeHistogramBounds is used to specify for which metrics cumulative histogram
-// counters should be reported, and what bucket boundaries to use. For example, if it contains an entry
-// {"foo", {1, 10, 100}}, for any metricTypeStat metric named *foo, four additional counters will be
-// created, with suffixes ".less_than.{1,10,100,inf}" appended to the original metric name, representing
-// the number of observations with observed values less than 1, 10, 100, and infinity, respectively. If
-// multiple entries match a given metric, the first match will be used.
 type PerMetricCumulativeHistogramBounds []struct {
 	Suffix string
 	Bounds []int64
+}
+
+type stats struct {
+	handled, flushed int64
 }
 
 type localSink struct {
@@ -33,6 +32,11 @@ type localSink struct {
 	gauges   _metrics.Registry
 	stats    _metrics.Registry
 	dst      Sink
+
+	prefix string // prefix for stats exported by localSink
+	s      *stats
+
+	clock clockwork.Clock
 
 	// See the documentation for NewLocalSink for how perMetricCumulativeHistogramBounds is used.
 	perMetricCumulativeHistogramBounds PerMetricCumulativeHistogramBounds
@@ -54,6 +58,7 @@ func (sink *localSink) Handle(metric string, tags Tags, value float64, metricTyp
 	sink.registerLock.Lock()
 	defer sink.registerLock.Unlock()
 
+	sink.s.handled++
 	return sink.handleLocked(metric, tags, value, metricType)
 }
 
@@ -83,7 +88,7 @@ func (sink *localSink) handleLocked(metric string, tags Tags, value float64, met
 	case metricTypeStat:
 		stat := sink.stats.Get(formatted)
 		if stat == nil {
-			sample := um.NewTimeWindowSample(4096, 8192, 300*time.Second)
+			sample := um.NewTDigestSample(300*time.Second, sink.clock)
 			stat = _metrics.NewHistogram(sample)
 			// N.B. defer so that we only register after we've set the value.
 			defer sink.stats.Register(formatted, stat)
@@ -93,7 +98,7 @@ func (sink *localSink) handleLocked(metric string, tags Tags, value float64, met
 			if !strings.HasSuffix(metric, pair.Suffix) {
 				continue
 			}
-			for idx := len(pair.Bounds) - 1; idx >= 0; idx-- {
+			for idx := len(pair.Bounds) - 1; idx >= 0; idx -= 1 {
 				bound := pair.Bounds[idx]
 				counterName := fmt.Sprintf("%s.less_than.%d", metric, bound)
 				if value < float64(bound) {
@@ -106,7 +111,7 @@ func (sink *localSink) handleLocked(metric string, tags Tags, value float64, met
 			break
 		}
 	default:
-		return fmt.Errorf("unknown metric type: %s", metricType)
+		return errors.New(fmt.Sprintf("unknown metric type: %s", metricType))
 	}
 	return nil
 }
@@ -133,6 +138,7 @@ func (sink *localSink) Flush() error {
 	sink.flushLock.Lock()
 	defer sink.flushLock.Unlock()
 
+	counters, gauges, histograms := 0, 0, 0
 	flush := func(name string, i interface{}) {
 		split := strings.Split(name, "|")
 		if len(split) != 2 {
@@ -151,16 +157,22 @@ func (sink *localSink) Flush() error {
 		switch metric := i.(type) {
 		case _metrics.Counter:
 			if shouldFlush(metricTypeCounter, name) {
+				sink.s.flushed++
+				counters++
 				sink.dst.Handle(metricName, tags, float64(metric.Count()), metricTypeGauge)
 			}
 		case _metrics.GaugeFloat64:
 			if shouldFlush(metricTypeGauge, name) {
+				sink.s.flushed++
+				gauges++
 				sink.dst.Handle(metricName, tags, float64(metric.Value()), metricTypeGauge)
 			}
 		case _metrics.Histogram:
-			h := metric.Snapshot()
+			h := metric.Sample()
 			p := h.Percentiles([]float64{0.5000, 0.9000, 0.9900})
 			if shouldFlush(metricTypeStat, name) {
+				histograms++
+				sink.s.flushed += 8
 				sink.dst.Handle(metricName+".count", tags, float64(h.Count()), metricTypeGauge)
 				sink.dst.Handle(metricName+".max", tags, float64(h.Max()), metricTypeGauge)
 				sink.dst.Handle(metricName+".min", tags, float64(h.Min()), metricTypeGauge)
@@ -176,9 +188,16 @@ func (sink *localSink) Flush() error {
 		}
 	}
 
+	sink.registerLock.Lock()
 	sink.counters.Each(flush)
 	sink.gauges.Each(flush)
 	sink.stats.Each(flush)
+	sink.dst.Handle(sink.prefix+".handled", nil, float64(sink.s.handled), metricTypeGauge)
+	sink.dst.Handle(sink.prefix+".flushed", nil, float64(sink.s.flushed), metricTypeGauge)
+	sink.dst.Handle(sink.prefix+".counters.active", nil, float64(counters), metricTypeGauge)
+	sink.dst.Handle(sink.prefix+".gauges.active", nil, float64(gauges), metricTypeGauge)
+	sink.dst.Handle(sink.prefix+".histograms.active", nil, float64(histograms), metricTypeGauge)
+	sink.registerLock.Unlock()
 
 	sink.dst.Flush()
 	return nil
@@ -191,15 +210,28 @@ func (sink *localSink) Close() {
 	sink.stats.UnregisterAll()
 }
 
-// NewLocalSink returns an implementation of sink. Pass in the destination
-// sink like statsd, and perMetricCumulativeHistogramBounds to add histogram
-// metrics
-func NewLocalSink(dst Sink, flushThreshold int, perMetricCumulativeHistogramBounds PerMetricCumulativeHistogramBounds) Sink {
+// perMetricCumulativeHistogramBounds is used to specify for which metrics cumulative histogram
+// counters should be reported, and what bucket boundaries to use. For example, if it contains an entry
+// {"foo", {1, 10, 100}}, for any metricTypeStat metric named *foo, four additional counters will be
+// created, with suffixes ".less_than.{1,10,100,inf}" appended to the original metric name, representing
+// the number of observations with observed values less than 1, 10, 100, and infinity, respectively. If
+// multiple entries match a given metric, the first match will be used.
+func NewLocalSink(
+	dst Sink,
+	flushThreshold int,
+	perMetricCumulativeHistogramBounds PerMetricCumulativeHistogramBounds,
+	prefix string,
+	clock clockwork.Clock,
+) *localSink {
 	return &localSink{
 		counters: _metrics.NewRegistry(),
 		gauges:   _metrics.NewRegistry(),
 		stats:    _metrics.NewRegistry(),
 		dst:      dst,
+
+		s:      &stats{},
+		prefix: prefix,
+		clock:  clock,
 
 		perMetricCumulativeHistogramBounds: perMetricCumulativeHistogramBounds,
 

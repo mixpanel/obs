@@ -105,8 +105,9 @@ func (sink *wavefrontSink) Flush() error {
 	for i := 0; i < len(sink.hostPorts); i++ {
 		if err = send(sink.hostPorts[idx], sendBuffer.Bytes()); err == nil {
 			return nil
+		} else {
+			idx = (idx + 1) % len(sink.hostPorts)
 		}
-		idx = (idx + 1) % len(sink.hostPorts)
 	}
 
 	return err
@@ -120,7 +121,6 @@ func (sink *wavefrontSink) Close() {
 	sink.Flush()
 }
 
-// NewWavefrontSink returns a sink for wavefront.
 func NewWavefrontSink(origin string, tags map[string]string, hostPorts []string) Sink {
 	return &wavefrontSink{
 		origin:    origin,

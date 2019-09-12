@@ -4,8 +4,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/mixpanel/obs/logging"
 	"github.com/mixpanel/obs/metrics"
+
+	"github.com/mixpanel/obs/logging"
 
 	flags "github.com/jessevdk/go-flags"
 )
@@ -51,7 +52,7 @@ func (opts *ObsOptions) InitWithSink(metricsPrefix string, sink metrics.Sink) {
 	receiver := metrics.NewReceiver(Sink)
 	Metrics = receiver.ScopePrefix(metricsPrefix)
 	reportGCMetrics(3*time.Second, nil, Metrics)
-	reportVersion(nil, Metrics)
+	//reportVersion(nil, Metrics)
 	reportUptime(nil, Metrics)
 }
 

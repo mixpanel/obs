@@ -50,4 +50,5 @@ func TestLocalhostFields(t *testing.T) {
 	assert.NotNil(t, localhostFields["pid"])
 	assert.NotNil(t, localhostFields["executable"])
 	assert.NotNil(t, localhostFields["hostname"])
+	assert.NotNil(t, localhostFields["role"])
 }

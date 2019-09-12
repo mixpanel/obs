@@ -14,6 +14,7 @@ type format int
 const (
 	formatJSON = format(iota)
 	formatText
+	formatHuman
 )
 
 var myPid = os.Getpid()
@@ -44,6 +45,18 @@ func textFormatter(lvl level, name, message string, fields Fields) string {
 		fmt.Fprintf(buffer, "[%s] pid=%d [%s] %s: ", time.Now().Format(timeFormatStr), myPid, levelToString(lvl), name)
 	}
 	formatFields(buffer, message, fields)
+
+	return buffer.String()
+}
+
+func humanFormatter(lvl level, name, message string, fields Fields) string {
+	buffer := bytes.NewBuffer(make([]byte, 0, len(message)*2))
+
+	if name == "" {
+		fmt.Fprintf(buffer, "[%s]: %s", levelToString(lvl), message)
+	} else {
+		fmt.Fprintf(buffer, "[%s] %s: %s", levelToString(lvl), name, message)
+	}
 
 	return buffer.String()
 }
@@ -100,6 +113,8 @@ func formatToEnum(s string) format {
 		return formatJSON
 	case "text":
 		return formatText
+	case "human":
+		return formatHuman
 	default:
 		panic(fmt.Errorf("error unknown log format type: %s", s))
 	}

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/mixpanel/obs/metrics"
+
 	"github.com/stretchr/testify/assert"
 )
 

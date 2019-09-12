@@ -38,11 +38,15 @@ func (sink *statsdSink) Handle(metric string, tags Tags, value float64, metricTy
 	// we use buf.WriteString instead of Fprintf because it's faster
 	// as per documentation, WriteString never returns an error, so we ignore it here
 	_, _ = buf.WriteString(metric)
-	_, _ = buf.WriteString(":")
-	if _, err := fmt.Fprintf(buf, "%g", value); err != nil {
-		return err
+	_ = buf.WriteByte(':')
+	if value == 1 {
+		_ = buf.WriteByte('1')
+	} else {
+		if _, err := fmt.Fprintf(buf, "%g", value); err != nil {
+			return err
+		}
 	}
-	_, _ = buf.WriteString("|")
+	_ = buf.WriteByte('|')
 	_, _ = buf.WriteString(string(metricType))
 
 	if len(tags) > 0 {
@@ -52,11 +56,11 @@ func (sink *statsdSink) Handle(metric string, tags Tags, value float64, metricTy
 		numTags := len(tags)
 		for k, v := range tags {
 			_, _ = buf.WriteString(k)
-			_, _ = buf.WriteString(":")
+			_ = buf.WriteByte(':')
 			_, _ = buf.WriteString(v)
-			numTags--
+			numTags -= 1
 			if numTags > 0 {
-				_, _ = buf.WriteString(",")
+				_ = buf.WriteByte(',')
 			}
 		}
 	}
@@ -150,8 +154,10 @@ func newStatsdSinkFromConn(conn net.Conn) (Sink, error) {
 	return sink, nil
 }
 
-// NewStatsdSink returns a Sink for statsd
-// pass the address of the statsd daemon to it
+func NewStatsdSinkFromConn(conn net.Conn) (Sink, error) {
+	return newStatsdSinkFromConn(conn)
+}
+
 func NewStatsdSink(addr string) (Sink, error) {
 	if addr == "" {
 		return &nullSink{}, nil
