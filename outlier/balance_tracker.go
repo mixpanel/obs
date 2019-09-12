@@ -1,13 +1,13 @@
 package outlier
 
 import (
+	"fmt"
 	"hash"
 	"hash/fnv"
+	"obs"
+	"obs/logging"
+	"obs/metrics"
 	"sync"
-
-	"github.com/mixpanel/obs"
-	"github.com/mixpanel/obs/logging"
-	"github.com/mixpanel/obs/metrics"
 )
 
 type BalanceTracker interface {
@@ -132,6 +132,7 @@ func (t *balanceTracker) sample() {
 				imbalanced[k] = struct{}{}
 				numImbalanced++
 
+				t.receiver.Incr(fmt.Sprintf("imbalanced.%d", k))
 				obs.Log.Warn("imbalanced tracks for key", logging.Fields{
 					"key":        k,
 					"num_tracks": v.count,

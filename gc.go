@@ -1,10 +1,9 @@
 package obs
 
 import (
+	"obs/metrics"
 	"runtime"
 	"time"
-
-	"github.com/mixpanel/obs/metrics"
 )
 
 func reportGCMetrics(interval time.Duration, done <-chan struct{}, r metrics.Receiver) {

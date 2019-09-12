@@ -1,11 +1,11 @@
 package outlier
 
 import (
+	"obs/metrics"
 	"strconv"
 	"testing"
 	"time"
 
-	"github.com/mixpanel/obs/metrics"
 	"github.com/stretchr/testify/assert"
 )
 

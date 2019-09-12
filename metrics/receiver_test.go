@@ -24,7 +24,7 @@ func BenchmarkHandleStats(b *testing.B) {
 
 	go func() {
 		remaining := b.N
-		for range ch {
+		for _ = range ch {
 			remaining--
 			if remaining == 0 {
 				wg.Done()

@@ -44,6 +44,7 @@ func TestTextFormattingLevel(t *testing.T) {
 func TestFormatToEnum(t *testing.T) {
 	assert.Equal(t, formatJSON, formatToEnum("json"))
 	assert.Equal(t, formatText, formatToEnum("text"))
+	assert.Equal(t, formatHuman, formatToEnum("human"))
 	assert.Panics(t, func() {
 		formatToEnum("blah")
 	})

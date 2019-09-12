@@ -2,9 +2,12 @@ package obserr
 
 import (
 	"errors"
+	"strconv"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestErrorsNew(t *testing.T) {
@@ -62,4 +65,39 @@ func TestErrorsOriginal(t *testing.T) {
 
 	assert.Equal(t, o, Original(e))
 	assert.Equal(t, o, Original(o))
+}
+
+func TestErrorConcurrent(t *testing.T) {
+	e := New("foo")
+
+	var wg sync.WaitGroup
+	for i := 0; i < 10; i++ {
+		i := i
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			e.Set("set_by_groutine_"+strconv.Itoa(i), i)
+		}()
+	}
+
+	wg.Wait()
+	assert.Len(t, e.Vals(), 10)
+}
+
+func TestErrorDuplicated(t *testing.T) {
+	orig := New("original")
+	const concurrency = 100
+	var wg sync.WaitGroup
+	for i := 0; i < concurrency; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+
+			_ = Annotate(orig, "foo")
+			other := Annotate(orig, "bar")
+			require.Equal(t, orig.Error(), "original")
+			require.Equal(t, other.Error(), Annotate(errors.New("original"), "bar").Error())
+		}()
+	}
+	wg.Wait()
 }

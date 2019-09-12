@@ -1,9 +1,9 @@
 package topk
 
 import (
+	"obs/metrics"
 	"testing"
 
-	"github.com/mixpanel/obs/metrics"
 	"github.com/stretchr/testify/mock"
 )
 

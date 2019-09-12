@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"obs/metrics"
 	"sync"
 	"time"
 
@@ -17,13 +18,13 @@ import (
 	cloudtrace "google.golang.org/api/cloudtrace/v1"
 )
 
-func New(opts basictracer.Options) (opentracing.Tracer, func()) {
-	r := newRecorder()
+func New(mr metrics.Receiver, opts basictracer.Options) (opentracing.Tracer, func()) {
+	r := newRecorder(mr)
 	opts.Recorder = r
 	return basictracer.NewWithOptions(opts), r.Close
 }
 
-func newRecorder() *recorder {
+func newRecorder(mr metrics.Receiver) *recorder {
 	client, err := google.DefaultClient(context.Background(), cloudtrace.TraceAppendScope)
 	if err != nil {
 		log.Printf("error initializing google.DefaultClient: %v", err)
@@ -43,6 +44,7 @@ func newRecorder() *recorder {
 	}
 
 	r := &recorder{
+		mr:      mr,
 		svc:     cloudtrace.NewProjectsService(service),
 		traces:  make(chan *cloudtrace.Trace, 64),
 		project: project,
@@ -98,6 +100,7 @@ func (r *recorder) Close() {
 }
 
 type recorder struct {
+	mr      metrics.Receiver
 	svc     *cloudtrace.ProjectsService
 	traces  chan *cloudtrace.Trace
 	project string
@@ -132,10 +135,12 @@ func (r *recorder) flushSpans(traces []*cloudtrace.Trace) {
 
 	traces = combined
 	_, err := r.svc.PatchTraces(r.project, &cloudtrace.Traces{Traces: traces}).Do()
-
 	if err != nil {
+		r.mr.Incr("patch_traces.error")
 		log.Printf("error sending trace to cloudtrace: %v", err)
+		return
 	}
+	r.mr.Incr("patch_traces.ok")
 }
 
 func (r *recorder) rawSpanToTrace(raw basictracer.RawSpan) *cloudtrace.Trace {

@@ -2,11 +2,10 @@ package topk
 
 import (
 	"log"
+	"obs/metrics"
+	"obs/mixpanel"
 	"sync"
 	"time"
-
-	"github.com/mixpanel/obs/metrics"
-	"github.com/mixpanel/obs/mixpanel"
 )
 
 const (
@@ -18,13 +17,15 @@ const (
 
 type ProjectTracker interface {
 	Track(projectId int32, tags ...string)
+	TrackN(projectId int32, n int, tags ...string)
 	Close()
 }
 
 type NullProjectTracker struct{}
 
-func (p *NullProjectTracker) Track(projectId int32, tags ...string) {}
-func (p *NullProjectTracker) Close()                                {}
+func (p *NullProjectTracker) Track(projectId int32, tags ...string)         {}
+func (p *NullProjectTracker) TrackN(projectId int32, n int, tags ...string) {}
+func (p *NullProjectTracker) Close()                                        {}
 
 type projectCounts map[string]int64
 
@@ -66,6 +67,10 @@ func NewProjectTracker(client mixpanel.Client,
 }
 
 func (p *projectTracker) Track(projectId int32, tags ...string) {
+	p.TrackN(projectId, 1, tags...)
+}
+
+func (p *projectTracker) TrackN(projectId int32, n int, tags ...string) {
 	p.mutex.Lock()
 	defer p.mutex.Unlock()
 
@@ -74,9 +79,9 @@ func (p *projectTracker) Track(projectId int32, tags ...string) {
 	}
 
 	count := p.counts[projectId]
-	count[CountTag]++
+	count[CountTag] += int64(n)
 	for _, tag := range tags {
-		count[tag]++
+		count[tag] += int64(n)
 	}
 }
 
@@ -103,7 +108,7 @@ func (p *projectTracker) flush() {
 
 	var events []*mixpanel.TrackedEvent
 
-	maxBatchSize := 100
+	maxBatchSize := 40
 	for projectId, count := range counts {
 		props := map[string]interface{}{
 			"distinct_id": projectId,

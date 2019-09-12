@@ -2,9 +2,8 @@ package topk
 
 import (
 	"fmt"
+	"obs/metrics"
 	"sync"
-
-	"github.com/mixpanel/obs/metrics"
 )
 
 const (
@@ -17,6 +16,11 @@ type Receiver interface {
 	Track(int32)
 	Close()
 }
+
+type NullReceiver struct{}
+
+func (r *NullReceiver) Track(projectID int32) {}
+func (r *NullReceiver) Close()                {}
 
 type receiver struct {
 	ch      chan<- int32

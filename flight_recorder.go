@@ -2,12 +2,13 @@ package obs
 
 import (
 	"fmt"
+	"net/http"
+	"obs/logging"
+	"obs/metrics"
 	"runtime"
 	"sync"
 	"time"
-
-	"github.com/mixpanel/obs/logging"
-	"github.com/mixpanel/obs/metrics"
+	"version"
 
 	"google.golang.org/grpc"
 
@@ -35,6 +36,7 @@ func NewFlightRecorder(name string, metrics metrics.Receiver, logger logging.Log
 
 var NullFlightRecorder = NewFlightRecorder("null_recorder", metrics.Null, logging.Null, opentracing.NoopTracer{})
 var NullFR = NullFlightRecorder
+var NullFS = &nullFlightSpan{}
 
 // Tags should be used for categorizing telemetry. For example, you should use a Tag for something like
 // query_type but not query_id. Typically the cardinality of values is small.
@@ -85,13 +87,13 @@ func (v Vals) WithError(err error) Vals {
 // FlightRecorder is a unified interface for all types of telemetry. A FlightRecorder is opinionated about
 // what is reported to each underlying system.
 //
-// To use a FlightRecorder, construct one with InitGCP or another custom IaaS. This will return your root instance.
+// To use a FlightRecorder, construct one with InitGCP or InitSoftlayer. This will return your root instance.
 // Inject the instance into all users that need it. Each recipient of a FlightRecorder should immediately
 // scope it with a name and tags if applicable. For example:
 //
 // func NewService() *Service {
 //     return &Service{
-//         fr: obs.FR.ScopeName("MyService"),
+//         fr: obs.FR.ScopeName("my_service_snake_case"),
 //     }
 // }
 //
@@ -164,6 +166,14 @@ type FlightRecorder interface {
 	// streaming RPCs with that particular server. Make sure to also include GRPServer.
 	GRPCStreamServer() grpc.ServerOption
 
+	// GRPCServer returns a grpc.UnaryServerInterceptor to use to allow this FlightRecorder to intercept and instrument
+	// unary RPCs with that particular server. Make sure to also include grpc.StreamServerInterceptor.
+	GRPCUnaryServerInterceptor() grpc.UnaryServerInterceptor
+
+	// GRPCServer returns a grpc.StreamServerInterceptor to use to allow this FlightRecorder to intercept and instrument
+	// unary RPCs with that particular server. Make sure to also include grpc.UnaryServerInterceptor.
+	GRPCStreamServerInterceptor() grpc.StreamServerInterceptor
+
 	// WithNewSpanContext is like WithNewSpan but allows you to specify the parent SpanContext instead of deriving it
 	// from the context.Context. This is usually only useful for libraries that derive tracing contexts from out-of-process
 	// origins, such as as GRPC request where the tracing context is embeded in GRPC Metadata.
@@ -192,9 +202,12 @@ type FlightSpan interface {
 
 	TraceSpan() opentracing.Span
 	TraceID() (string, bool)
+	Sampled() bool
+	SetTraceHeaders(http.Header) error
 }
 
 type Stopwatch interface {
+	Elapsed() time.Duration
 	Stop()
 }
 
@@ -241,10 +254,18 @@ func (fr *flightRecorder) GRPCStreamClient() grpc.DialOption {
 }
 
 func (fr *flightRecorder) GRPCServer() grpc.ServerOption {
-	return grpc.UnaryInterceptor(tracingUnaryServerInterceptor(fr, fr.tr))
+	return grpc.UnaryInterceptor(TracingUnaryServerInterceptor(fr, fr.tr))
 }
 func (fr *flightRecorder) GRPCStreamServer() grpc.ServerOption {
 	return grpc.StreamInterceptor(tracingStreamServerInterceptor(fr, fr.tr))
+}
+
+func (fr *flightRecorder) GRPCUnaryServerInterceptor() grpc.UnaryServerInterceptor {
+	return TracingUnaryServerInterceptor(fr, fr.tr)
+}
+
+func (fr *flightRecorder) GRPCStreamServerInterceptor() grpc.StreamServerInterceptor {
+	return tracingStreamServerInterceptor(fr, fr.tr)
 }
 
 func (fr *flightRecorder) mkScoped(name string, tags Tags) *flightRecorder {
@@ -308,6 +329,19 @@ func (fs *flightSpan) TraceSpan() opentracing.Span {
 	return fs.span
 }
 
+func (fs *flightSpan) SetTraceHeaders(h http.Header) error {
+	if fs.span == nil {
+		return nil
+	}
+
+	if sctx, ok := fs.span.Context().(basictracer.SpanContext); ok {
+		tracer := fs.span.Tracer()
+		return tracer.Inject(sctx, opentracing.HTTPHeaders, opentracing.HTTPHeadersCarrier(h))
+	}
+
+	return nil
+}
+
 func (fr *flightRecorder) WithNewSpan(ctx context.Context, opName string) (FlightSpan, context.Context, DoneFunc) {
 	var spanCtx opentracing.SpanContext
 	if parentSpan := opentracing.SpanFromContext(ctx); parentSpan != nil {
@@ -348,6 +382,8 @@ func (fr *flightRecorder) WithRootSpan(ctx context.Context, opName string, sampl
 	if sc, ok := fs.TraceSpan().Context().(basictracer.SpanContext); ok {
 		if sc.TraceID%uint64(sampleOneInN) == 0 {
 			ext.SamplingPriority.Set(fs.TraceSpan(), 1)
+		} else {
+			ext.SamplingPriority.Set(fs.TraceSpan(), 0)
 		}
 	}
 	return fs, ctx, done
@@ -370,6 +406,16 @@ func (fs *flightSpan) TraceID() (string, bool) {
 	return "", false
 }
 
+func (fs *flightSpan) Sampled() bool {
+	if fs.span == nil {
+		return false
+	}
+	if sc, ok := fs.span.Context().(basictracer.SpanContext); ok {
+		return sc.Sampled
+	}
+	return false
+}
+
 func (fs *flightSpan) logFields(vals Vals) logging.Fields {
 	fields := make(logging.Fields, len(vals)+len(fs.tags))
 	for k, v := range fs.tags {
@@ -383,8 +429,7 @@ func (fs *flightSpan) logFields(vals Vals) logging.Fields {
 	fields["eventTime"] = time.Now().Format(time.RFC3339Nano)
 	fields["serviceContext"] = map[string]interface{}{
 		"service": fs.serviceName,
-		// TODO: Add Back
-		//"version": version.GitCommit,
+		"version": version.GitCommit,
 	}
 
 	fields["context"] = getCallerContext(3)
@@ -441,17 +486,31 @@ func (fs *flightSpan) Incr(name string) {
 
 func (fs *flightSpan) IncrBy(name string, amount float64) {
 	fs.mr.IncrBy(name, amount)
-	fs.logTrace(fmt.Sprintf("Incr %s, value: %g", name, amount), nil)
+	// NOTE: We don't normally actually log these messages anywhere,
+	// but formatting them accounts for almost 10% of our time spent
+	// in metrics (and not-logging for another 1%) in the main code
+	// (and the majority of our fake-tracking time in a few tools).
+	// If this turns out to lose important information, at least
+	// uncomment the if below, which will skip the wasted work in a
+	// large subset of the cases. (To really catch all of them, you
+	// also need to see if the raw span is nil or its context is not
+	// sampling or a do-nothing recorder is hooked up to it.) -- AB
+	// 20Apr2018 SYS-3786
+	// if fs.span != nil && fs.span.Tracer() != nil {
+	//	fs.logTrace(fmt.Sprintf("Incr %s, value: %g", name, amount), nil)
+	// }
 }
 
 func (fs *flightSpan) AddStat(name string, value float64) {
 	fs.mr.AddStat(name, value)
-	fs.logTrace(fmt.Sprintf("AddStat %s, value: %g", name, value), nil)
+	// NOTE: See above (IncrBy, SYS-3786)
+	// fs.logTrace(fmt.Sprintf("AddStat %s, value: %g", name, value), nil)
 }
 
 func (fs *flightSpan) SetGauge(name string, value float64) {
 	fs.mr.SetGauge(name, value)
-	fs.logTrace(fmt.Sprintf("SetGauge %s, value: %g", name, value), nil)
+	// NOTE: See above (IncrBy, SYS-3786)
+	// fs.logTrace(fmt.Sprintf("SetGauge %s, value: %g", name, value), nil)
 }
 
 func (fs *flightSpan) StartStopwatch(name string) Stopwatch {
@@ -464,8 +523,12 @@ type sw struct {
 	startTime time.Time
 }
 
+func (s *sw) Elapsed() time.Duration {
+	return time.Since(s.startTime)
+}
+
 func (s *sw) Stop() {
-	d := time.Now().Sub(s.startTime)
+	d := s.Elapsed()
 	s.fs.AddStat(s.name+"_us", float64(d/time.Microsecond))
 	s.fs.TraceSpan().SetTag(s.name, d.String())
 }
@@ -495,3 +558,63 @@ func getCallerContext(n int) map[string]interface{} {
 }
 
 var noopSpan = opentracing.NoopTracer{}.StartSpan("noop")
+
+type nullFlightSpan struct {
+}
+
+func (fs *nullFlightSpan) TraceID() (string, bool) {
+	return "", false
+}
+
+func (fs *nullFlightSpan) Sampled() bool {
+	return false
+}
+
+func (fs *nullFlightSpan) Trace(message string, vals Vals) {
+}
+
+func (fs *nullFlightSpan) Debug(message string, vals Vals) {
+}
+
+func (fs *nullFlightSpan) Info(message string, vals Vals) {
+}
+
+func (fs *nullFlightSpan) Warn(name, message string, vals Vals) {
+}
+
+func (fs *nullFlightSpan) Critical(name, message string, vals Vals) {
+}
+
+func (fs *nullFlightSpan) Incr(name string) {
+}
+
+func (fs *nullFlightSpan) IncrBy(name string, amount float64) {
+}
+
+func (fs *nullFlightSpan) AddStat(name string, value float64) {
+}
+
+func (fs *nullFlightSpan) SetGauge(name string, value float64) {
+}
+
+func (fs *nullFlightSpan) SetTraceHeaders(h http.Header) error {
+	return nil
+}
+
+func (fs *nullFlightSpan) TraceSpan() opentracing.Span {
+	return noopSpan
+}
+
+func (fs *nullFlightSpan) StartStopwatch(name string) Stopwatch {
+	return &nullSW{}
+}
+
+type nullSW struct {
+}
+
+func (s *nullSW) Elapsed() time.Duration {
+	return 0
+}
+
+func (s *nullSW) Stop() {
+}

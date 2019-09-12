@@ -2,10 +2,9 @@ package obs
 
 import (
 	"fmt"
+	"obs/logging"
+	"obs/metrics"
 	"time"
-
-	"github.com/mixpanel/obs/logging"
-	"github.com/mixpanel/obs/metrics"
 
 	flags "github.com/jessevdk/go-flags"
 )

@@ -34,7 +34,7 @@ func TestSyslog(t *testing.T) {
 		parsed := map[string]interface{}{}
 		err := json.Unmarshal(buf.Bytes()[9:], &parsed)
 		if assert.NoError(t, err) {
-			expectedKeys := []string{"pid", "argv", "executable", "key", "level", "logger", "message"}
+			expectedKeys := []string{"pid", "role", "argv", "executable", "key", "level", "logger", "message"}
 			for _, k := range expectedKeys {
 				v, found := parsed[k]
 				assert.NotNil(t, v)

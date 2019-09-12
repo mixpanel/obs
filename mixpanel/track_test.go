@@ -25,10 +25,8 @@ type testServer struct {
 
 func newClient(token, apiKey, baseUrl string) *client {
 	return &client{
-		token:   token,
-		apiKey:  apiKey,
-		baseUrl: baseUrl,
-		api:     &http.Client{},
+		projects: []Project{Project{Token: token, ApiKey: apiKey, BaseUrl: baseUrl}},
+		api:      &http.Client{},
 	}
 }
 
@@ -170,7 +168,7 @@ func TestEncodeEvent(t *testing.T) {
 
 	client := newClient("some_token", "some_api_key", "http://0:0")
 
-	encoded, err := client.encodeEvent(events)
+	encoded, err := client.projects[0].encodeEvent(events)
 	assert.Nil(t, err)
 
 	decoded, err := base64.StdEncoding.DecodeString(encoded)

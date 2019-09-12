@@ -2,8 +2,6 @@ package logging
 
 var initErrors []string
 
-// New creates a new logger, pass in the log levels,
-// and file specifications to create one
 func New(syslogLevel, fileLevel, filePath, format string) Logger {
 	logger := buildLogger(syslogLevel, fileLevel, filePath, format)
 	for _, message := range initErrors {

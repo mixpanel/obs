@@ -9,10 +9,6 @@ import (
 	"os"
 )
 
-// Logger is the interface to logging
-// It is simlar to standard logger but
-// supports fields. An implementation of logger
-// can be used by flight recorder for the logging.
 type Logger interface {
 	Debug(message string, fields Fields)
 	Info(message string, fields Fields)
@@ -146,6 +142,8 @@ func (l *logger) logAtLevel(lvl level, message string, fields Fields) {
 			golog.Println(jsonFormatter(lvl, l.name, message, fields))
 		case formatText:
 			golog.Println(textFormatter(lvl, l.name, message, fields))
+		case formatHuman:
+			golog.Println(humanFormatter(lvl, l.name, message, fields))
 		}
 	}
 

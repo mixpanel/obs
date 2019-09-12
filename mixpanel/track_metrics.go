@@ -1,16 +1,16 @@
 package mixpanel
 
 import (
+	"configmanager"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math/rand"
+	"obs"
 	"reflect"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
-
-	"github.com/mixpanel/obs"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -25,17 +25,46 @@ type MetricsTracker struct {
 	warnType string
 }
 
-type execution func(error)
-
-var traceClientInstance Client
-var traceClientOnce sync.Once
-
 func (qm *MetricsTracker) Init(token string, url string, fs obs.FlightSpan, warnType string) {
+	qm.InitWithDests([]TrackDestination{TrackDestination{TrackingToken: token, TrackingEndpoint: url}}, fs, warnType)
+}
+
+func (qm *MetricsTracker) InitWithCM(cm configmanager.Client, fs obs.FlightSpan, warnType string) {
 	rand.Seed(time.Now().UnixNano())
 	qm.StartTime = time.Now()
-	qm.initMetrics(token, url)
+	traceClientOnce.Do(func() {
+		traceClientInstance = NewClientWithConfigManager(cm)
+	})
+	qm.client = traceClientInstance
 	qm.fs = fs
 	qm.warnType = warnType
+}
+
+func (qm *MetricsTracker) InitWithDests(destinations []TrackDestination, fs obs.FlightSpan, warnType string) {
+	var projects []Project
+	for _, d := range destinations {
+		projects = append(projects, d.Project())
+	}
+	rand.Seed(time.Now().UnixNano())
+	qm.StartTime = time.Now()
+	qm.initMetrics(projects)
+	qm.fs = fs
+	qm.warnType = warnType
+}
+
+type sizeWriter struct {
+	size int
+}
+
+func (sw *sizeWriter) Write(p []byte) (int, error) {
+	sw.size += len(p)
+	return len(p), nil
+}
+
+func (qm *MetricsTracker) EstimateSize(vals obs.Vals) int {
+	sw := &sizeWriter{}
+	json.NewEncoder(sw).Encode(vals)
+	return sw.size
 }
 
 func (qm *MetricsTracker) ProcessError(msg string, err error) {
@@ -46,18 +75,33 @@ func (qm *MetricsTracker) ProcessError(msg string, err error) {
 	}
 }
 
-func (qm *MetricsTracker) initMetrics(token string, url string) {
-	if len(token) > 0 && len(url) > 0 && traceClientInstance == nil {
+func (qm *MetricsTracker) ProcessInfo(msg string, vals obs.Vals) {
+	qm.fs.Info(msg, vals)
+}
+
+func (qm *MetricsTracker) initMetrics(projects []Project) {
+	if len(projects) > 0 && len(projects[0].Token) > 0 && len(projects[0].BaseUrl) > 0 {
 		traceClientOnce.Do(func() {
-			traceClientInstance = NewClient(token, "", url) // No API key is needed for tracking
+			traceClientInstance = NewClientWithProjects(projects) // No API key is needed for tracking
 		})
 	}
-
 	qm.client = traceClientInstance
+}
+
+func (qm *MetricsTracker) Fail() {
+	qm.success = false
 }
 
 func (qm *MetricsTracker) Succeed() {
 	qm.success = true
+}
+
+func (qm *MetricsTracker) Success() bool {
+	return qm.success
+}
+
+func (qm *MetricsTracker) IncrCounter(c string) {
+	qm.fs.Incr(c)
 }
 
 // trackQuery completes the trackedevent and sends the tracking call
@@ -118,8 +162,9 @@ func GenerateStringKVMap(q interface{}, translation map[string]string) map[strin
 			m[fn] = strconv.FormatFloat(fv.Interface().(float64), 'f', -1, 64)
 		case reflect.Bool:
 			m[fn] = strconv.FormatBool(fv.Interface().(bool))
-		default:
+		case reflect.String:
 			m[fn] = fv.Interface().(string)
+		default:
 		}
 	}
 
@@ -157,6 +202,9 @@ func setField(q interface{}, name string, value string) error {
 		val = reflect.ValueOf(n)
 	case reflect.Int64:
 		n, _ := strconv.ParseInt(value, 10, 64)
+		val = reflect.ValueOf(n)
+	case reflect.Float64:
+		n, _ := strconv.ParseFloat(value, 64)
 		val = reflect.ValueOf(n)
 	case reflect.String:
 		val = reflect.ValueOf(value)
