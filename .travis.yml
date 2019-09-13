@@ -1,13 +1,12 @@
 language: go
 sudo: false
 go:
-  - 1.9.3
-  - tip
+  - 1.12.4
+  - 1.11.x
 cache:
   directories:
     - vendor
 install:
   - make dependencies
-  - make fix
 script:
   - make test
