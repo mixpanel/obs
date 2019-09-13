@@ -8,8 +8,7 @@ import (
 	"sync"
 	"time"
 
-	um "github.com/mixpanel/obs/util/metrics"
-	_metrics "github.com/rcrowley/go-metrics"
+	_metrics "github.com/mixpanel/obs/go-metrics"
 )
 
 type metricKey struct {
@@ -83,7 +82,7 @@ func (sink *localSink) handleLocked(metric string, tags Tags, value float64, met
 	case metricTypeStat:
 		stat := sink.stats.Get(formatted)
 		if stat == nil {
-			sample := um.NewTimeWindowSample(4096, 8192, 300*time.Second)
+			sample := _metrics.NewTimeWindowSample(4096, 8192, 300*time.Second)
 			stat = _metrics.NewHistogram(sample)
 			// N.B. defer so that we only register after we've set the value.
 			defer sink.stats.Register(formatted, stat)
