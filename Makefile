@@ -3,12 +3,6 @@ srcs := $(shell find . -path ./vendor -prune -o -name '*.go' | grep -v 'vendor')
 vendor_srcs := $(shell find ./vendor/ -name '*.go')
 PKGS ?= $(shell go list ./...)
 PKG_FILES ?= *.go
-GO_VERSION := $(shell go version | cut -d " " -f 3)
-GO_MINOR_VERSION := $(word 2,$(subst ., ,$(GO_VERSION)))
-LINTABLE_MINOR_VERSIONS := 6 7 8
-ifneq ($(filter $(LINTABLE_MINOR_VERSIONS),$(GO_MINOR_VERSION)),)
-SHOULD_LINT := true
-endif
 
 RACE=-race
 GOTEST=go test -v $(RACE)
@@ -25,7 +19,7 @@ dependencies:
 	dep version || go get -u github.com/golang/dep/cmd/dep
 	dep ensure
 	go get -u github.com/axw/gocov/gocov
-	go get -u github.com/golang/lint/golint
+	go get -u golang.org/x/lint/golint
 
 .PHONY: fmt
 fmt:
@@ -33,7 +27,6 @@ fmt:
 
 .PHONY: lint
 lint:
-ifdef SHOULD_LINT
 	@rm -rf $(LINT_LOG)
 	@rm -rf $(FMT_LOG)
 	@echo "gofmt the files..."
@@ -48,9 +41,6 @@ ifdef SHOULD_LINT
 	@echo "Checking for unresolved FIXMEs..."
 	@git grep -i fixme | grep -v -e vendor -e Makefile | tee -a $(LINT_LOG)
 	@[ ! -s "$(LINT_LOG)" ] || (echo "Lint Failures" | cat - $(LINT_LOG) && false)
-else
-	@echo "Skipping linters on" $(GO_VERSION)
-endif
 
 .PHONY: fix
 fix: $(pkg_file)
@@ -61,11 +51,3 @@ fix: $(pkg_file)
 .PHONY: test
 test:
 	$(GOTEST) $(PKGS)
-
-.PHONY: cover
-cover:
-	go test -cover -coverprofile cover.out -race -v $(PKGS)
-
-.PHONY: coveralls
-coveralls:
-	goveralls -service=travis-ci || echo "Coveralls failed"
