@@ -3,8 +3,6 @@ package metrics
 import (
 	"sync"
 	"time"
-
-	_metrics "github.com/rcrowley/go-metrics"
 )
 
 type timedValue struct {
@@ -28,7 +26,7 @@ type TimeWindowSample struct {
 	earliest  int
 }
 
-func NewTimeWindowSample(startWindowSize int, maxWindowSize int, timeWindow time.Duration) _metrics.Sample {
+func NewTimeWindowSample(startWindowSize int, maxWindowSize int, timeWindow time.Duration) Sample {
 	return &TimeWindowSample{
 		startWindowSize: startWindowSize,
 		maxWindowSize:   maxWindowSize,
@@ -168,38 +166,42 @@ func (sample *TimeWindowSample) Values() []int64 {
 }
 
 func (sample *TimeWindowSample) Max() int64 {
-	return _metrics.SampleMax(sample.Values())
+	return SampleMax(sample.Values())
 }
 
 func (sample *TimeWindowSample) Mean() float64 {
-	return _metrics.SampleMean(sample.Values())
+	return SampleMean(sample.Values())
 }
 
 func (sample *TimeWindowSample) Min() int64 {
-	return _metrics.SampleMin(sample.Values())
+	return SampleMin(sample.Values())
 }
 
 func (sample *TimeWindowSample) Percentile(percentile float64) float64 {
-	return _metrics.SamplePercentile(sample.Values(), percentile)
+	return SamplePercentile(sample.Values(), percentile)
 }
 
 func (sample *TimeWindowSample) Percentiles(percentiles []float64) []float64 {
-	return _metrics.SamplePercentiles(sample.Values(), percentiles)
+	return SamplePercentiles(sample.Values(), percentiles)
 }
 
-func (sample *TimeWindowSample) Snapshot() _metrics.Sample {
+func (sample *TimeWindowSample) Snapshot() Sample {
 	values := sample.Values()
-	return _metrics.NewSampleSnapshot(sample.count, values)
+	return &SampleSnapshot{
+		count:   sample.count,
+		dropped: sample.dropped,
+		values:  values,
+	}
 }
 
 func (sample *TimeWindowSample) StdDev() float64 {
-	return _metrics.SampleStdDev(sample.Values())
+	return SampleStdDev(sample.Values())
 }
 
 func (sample *TimeWindowSample) Sum() int64 {
-	return _metrics.SampleSum(sample.Values())
+	return SampleSum(sample.Values())
 }
 
 func (sample *TimeWindowSample) Variance() float64 {
-	return _metrics.SampleVariance(sample.Values())
+	return SampleVariance(sample.Values())
 }

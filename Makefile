@@ -5,7 +5,7 @@ PKGS ?= $(shell go list ./...)
 PKG_FILES ?= *.go
 
 RACE=-race
-GOTEST=go test -v $(RACE)
+GOTEST=go test $(RACE)
 GOLINT=golint
 GOVET=go vet
 GOFMT=gofmt

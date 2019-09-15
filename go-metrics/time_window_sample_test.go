@@ -1,6 +1,7 @@
 package metrics
 
 import (
+	"math/rand"
 	"testing"
 	"time"
 )
@@ -109,4 +110,26 @@ func TestTimeWindowSampleMultipleRounds(t *testing.T) {
 		sample.Update(int64(i))
 	}
 	compareValues(newArray(100000-1000, 1000), sample.Values(), t)
+}
+
+func BenchmarkTimeWindowSample(b *testing.B) {
+	rand.Seed(31)
+	sample := getSample(4096, 8192, "5m")
+	for i := 0; i < b.N; i++ {
+		sample.Update(rand.Int63())
+	}
+}
+
+func BenchmarkTimeWindowSamplePercentile(b *testing.B) {
+	rand.Seed(31)
+	sample := getSample(4096, 8192, "5m")
+	for i := 0; i < 100000; i++ {
+		sample.Update(rand.Int63())
+	}
+
+	percentiles := []float64{0.5, 0.9, 0.99}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		sample.Percentile(percentiles[i%len(percentiles)])
+	}
 }
