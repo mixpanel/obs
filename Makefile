@@ -1,6 +1,5 @@
 GO := go
 srcs := $(shell find . -path ./vendor -prune -o -name '*.go' | grep -v 'vendor')
-vendor_srcs := $(shell find ./vendor/ -name '*.go')
 PKGS ?= $(shell go list ./...)
 PKG_FILES ?= *.go
 
@@ -15,9 +14,6 @@ LINT_LOG=lint.log
 
 .PHONY: dependencies
 dependencies:
-	@echo "Installing golang dep if needed and looking for dependencies"
-	dep version || go get -u github.com/golang/dep/cmd/dep
-	dep ensure
 	go get -u github.com/axw/gocov/gocov
 	go get -u golang.org/x/lint/golint
 
